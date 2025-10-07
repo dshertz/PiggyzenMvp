@@ -1,0 +1,257 @@
+@page "/transactions"
+@using System.Linq
+@inject IHttpClientFactory HttpClientFactory
+
+<h2>Transaktioner</h2>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="alert alert-success" role="alert">@successMessage</div>
+}
+
+@if (transactions is null)
+{
+    <p><em>Laddar...</em></p>
+}
+else if (transactions.Count == 0)
+{
+    <p>Inga transaktioner hittades.</p>
+}
+else
+{
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr>
+                <th>Datum</th>
+                <th>Beskrivning</th>
+                <th>Belopp</th>
+                <th>Saldo</th>
+                <th>Type</th>
+                <th>Category</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var tx in transactions)
+            {
+                <tr>
+                    <td>@tx.TransactionDate.ToShortDateString()</td>
+                    <td>@tx.Description</td>
+                    <td>@tx.Amount.ToString("F2")</td>
+                    <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
+                    <td>@(tx.TypeName ?? "—")</td>
+                    <td>
+                        <select class="form-select form-select-sm" @onchange="async e => await OnCategoryChanged(tx, e)" disabled="@savingTransactions.Contains(tx.Id)">
+                            <option value="" selected="@(tx.CategoryId is null ? "selected" : null)">—</option>
+                            @foreach (var category in categories)
+                            {
+                                <option value="@category.Id" selected="@(tx.CategoryId == category.Id ? "selected" : null)">@GetCategoryDisplayName(category)</option>
+                            }
+                        </select>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<TransactionDto>? transactions;
+    private List<CategoryDto> categories = new();
+    private HashSet<int> savingTransactions = new();
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ApiClient");
+
+            var txTask = client.GetFromJsonAsync<List<TransactionDto>>("api/transactions");
+            var catTask = client.GetFromJsonAsync<List<CategoryDto>>("api/categories");
+
+            await Task.WhenAll(txTask!, catTask!);
+
+            transactions = txTask?.Result ?? new();
+            categories = catTask?.Result ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Fel vid hämtning: {ex.Message}");
+            transactions = new();
+            categories = new();
+            errorMessage = "Kunde inte läsa in data.";
+        }
+    }
+
+    private string GetSelectedCategoryValue(TransactionDto tx) =>
+        tx.CategoryId?.ToString() ?? string.Empty;
+
+    private string GetCategoryDisplayName(CategoryDto category)
+    {
+        if (category.ParentCategoryId is int parentId)
+        {
+            var parent = categories.FirstOrDefault(c => c.Id == parentId);
+            if (parent != null)
+            {
+                return $"{parent.Name} / {category.Name}";
+            }
+        }
+
+        return category.Name;
+    }
+
+    private async Task OnCategoryChanged(TransactionDto tx, ChangeEventArgs e)
+{
+    var rawValue = e.Value?.ToString();
+    if (string.IsNullOrWhiteSpace(rawValue))
+        return;
+
+    if (!int.TryParse(rawValue, out var categoryId))
+        return;
+
+    savingTransactions.Add(tx.Id);
+    successMessage = null;
+    errorMessage = null;
+    StateHasChanged();
+
+    try
+    {
+        var client = HttpClientFactory.CreateClient("ApiClient");
+        var request = new SetCategoryRequest(categoryId);
+
+        var response = await client.PutAsJsonAsync(
+            $"api/transactions/{tx.Id}/category",
+            request
+        );
+
+        if (response.IsSuccessStatusCode)
+        {
+            tx.CategoryId = categoryId;
+            UpdateCategoryFields(tx);
+            successMessage = "Kategori uppdaterad!";
+        }
+        else
+        {
+            errorMessage = "Kunde inte uppdatera kategori.";
+        }
+    }
+    catch (Exception ex)
+    {
+        errorMessage = ex.Message;
+    }
+    finally
+    {
+        savingTransactions.Remove(tx.Id);
+        StateHasChanged();
+    }
+}
+
+    private void UpdateCategoryFields(TransactionDto tx)
+    {
+        var category = tx.CategoryId is int id
+            ? categories.FirstOrDefault(c => c.Id == id)
+            : null;
+
+        if (category is null)
+        {
+            tx.CategoryId = null;
+            tx.CategoryName = null;
+            tx.TypeId = null;
+            tx.TypeName = null;
+            return;
+        }
+
+        tx.CategoryName = category.Name;
+
+        if (category.IsSystemCategory)
+        {
+            tx.TypeId = category.Id;
+            tx.TypeName = category.Name;
+        }
+        else if (category.ParentCategoryId is int parentId)
+        {
+            tx.TypeId = parentId;
+            tx.TypeName = categories.FirstOrDefault(c => c.Id == parentId)?.Name;
+        }
+        else
+        {
+            tx.TypeId = null;
+            tx.TypeName = null;
+        }
+    }
+}
+@* @page "/transactions"
+@inject IHttpClientFactory HttpClientFactory
+
+<h2>Transaktioner</h2>
+
+@if (transactions == null)
+{
+    <p><em>Laddar...</em></p>
+}
+else if (transactions.Count == 0)
+{
+    <p>Inga transaktioner hittades.</p>
+}
+else
+{
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr>
+                <th>Datum</th>
+                <th>Beskrivning</th>
+                <th>Belopp</th>
+                <th>Saldo</th>
+                <th>Type</th>
+                <th>Category</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var tx in transactions)
+            {
+                <tr>
+                    <td>@tx.TransactionDate.ToShortDateString()</td>
+                    <td>@tx.Description</td>
+                    <td>@tx.Amount.ToString("F2")</td>
+                    <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<TransactionDto>? transactions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            var response = await client.GetAsync("api/transactions");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var data = await response.Content.ReadFromJsonAsync<List<TransactionDto>>();
+                transactions = data ?? new();
+            }
+            else
+            {
+                // Hantera fel: logga, visa meddelande, etc.
+                transactions = new();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Logga eller visa fel till användaren
+            Console.Error.WriteLine($"Fel vid hämtning av transaktioner: {ex.Message}");
+            transactions = new();
+        }
+    }
+} *@

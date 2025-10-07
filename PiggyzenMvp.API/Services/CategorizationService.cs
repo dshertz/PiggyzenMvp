@@ -1,0 +1,262 @@
+using Microsoft.EntityFrameworkCore;
+using PiggyzenMvp.API.Data;
+using PiggyzenMvp.API.Models;
+
+namespace PiggyzenMvp.API.Services
+{
+    public class CategorizationService
+    {
+        private readonly PiggyzenMvpContext _context;
+        private readonly NormalizeService _normalize;
+
+        public CategorizationService(PiggyzenMvpContext context, NormalizeService normalize)
+        {
+            _context = context;
+            _normalize = normalize;
+        }
+
+        /// <summary>
+        /// Manuell kategorisering av en transaktion.
+        /// - 1:1 usage: återanvänd eller skapa usage.
+        /// - Upsert av CH på (NormalizedDescription, IsPositive, CategoryId).
+        /// - Synkar Transaction.CategoryId.
+        /// </summary>
+        public async Task<string?> CategorizeAsync(
+            string importId,
+            int categoryId,
+            CancellationToken ct = default
+        )
+        {
+            var t = await _context
+                .Transactions.Include(x => x.CategorizationUsage)
+                .ThenInclude(u => u.CategorizationHistory)
+                .FirstOrDefaultAsync(x => x.ImportId == importId, ct);
+
+            if (t == null)
+                return $"Transaktion med ImportId \"{importId}\" hittades inte.";
+
+            if (t.CategoryId == categoryId)
+                return null; // redan rätt
+
+            var norm = _normalize.Normalize(t.Description);
+            var isPos = t.Amount >= 0m;
+
+            // Hitta existerande CH för denna payee/tecken/kategori (beloppsintervall valfritt i MVP)
+            var history = await _context.CategorizationHistories.FirstOrDefaultAsync(
+                h =>
+                    h.NormalizedDescription == norm
+                    && h.IsPositive == isPos
+                    && h.CategoryId == categoryId,
+                ct
+            );
+
+            if (history == null)
+            {
+                history = new CategorizationHistory
+                {
+                    Description = t.Description,
+                    NormalizedDescription = norm,
+                    IsPositive = isPos,
+                    CategoryId = categoryId,
+                };
+                _context.CategorizationHistories.Add(history);
+            }
+
+            // 1:1 usage
+            var u = t.CategorizationUsage;
+            if (u == null)
+            {
+                u = new CategorizationUsage
+                {
+                    TransactionId = t.Id,
+                    Amount = t.Amount,
+                    TransactionDate = t.TransactionDate,
+                    CategorizationHistory = history,
+                    UsedAt = DateTime.UtcNow,
+                };
+                _context.CategorizationUsages.Add(u);
+            }
+            else
+            {
+                // Om byter CH: markera ev. override på tidigare val (spårbarhet)
+                if (u.CategorizationHistoryId != history.Id)
+                {
+                    u.WasOverridden = DateTime.UtcNow;
+                    u.CategorizationHistory = history;
+                    u.UsedAt = DateTime.UtcNow;
+                    u.WasOverridden = null; // detta är nu aktuellt val
+                }
+            }
+
+            // Håll Transaction i synk för snabba queries
+            t.CategoryId = categoryId;
+
+            await _context.SaveChangesAsync(ct);
+            return null;
+        }
+
+        /// <summary>
+        /// Auto-kategorisera en transaktion baserat på historik (utan att ange kategori).
+        /// Matchningsordning:
+        ///  1) norm + tecken + beloppsintervall som inkluderar amount
+        ///  2) norm + tecken (utan intervall)
+        ///  3) norm (IsPositive=null i CH)
+        /// Sätter Transaction.CategoryId och Usage till vald CH.
+        /// </summary>
+        public async Task<string?> AutoCategorizeAsync(
+            string importId,
+            CancellationToken ct = default
+        )
+        {
+            var t = await _context
+                .Transactions.Include(x => x.CategorizationUsage)
+                .ThenInclude(u => u.CategorizationHistory)
+                .FirstOrDefaultAsync(x => x.ImportId == importId, ct);
+
+            if (t == null)
+                return $"Transaktion med ImportId \"{importId}\" hittades inte.";
+
+            var norm = _normalize.Normalize(t.Description);
+            var isPos = t.Amount >= 0m;
+            var amount = t.Amount;
+
+            // Kandidater på norm
+            var candidates = await _context
+                .CategorizationHistories.Where(h => h.NormalizedDescription == norm)
+                .ToListAsync(ct);
+
+            if (candidates.Count == 0)
+                return "Ingen historik matchar denna mottagare/beskrivning.";
+
+            // Rangordna kandidater
+            CategorizationHistory? pick =
+                candidates.FirstOrDefault(h => MatchesSign(h, isPos) && InRange(h, amount))
+                ?? candidates.FirstOrDefault(h => MatchesSign(h, isPos))
+                ?? candidates.FirstOrDefault(h => h.IsPositive == null);
+
+            if (pick == null)
+                return "Ingen lämplig regel kunde väljas för auto-kategorisering.";
+
+            // 1:1 usage (skapa/uppdatera)
+            var u = t.CategorizationUsage;
+            if (u == null)
+            {
+                u = new CategorizationUsage
+                {
+                    TransactionId = t.Id,
+                    Amount = t.Amount,
+                    TransactionDate = t.TransactionDate,
+                    CategorizationHistoryId = pick.Id,
+                    UsedAt = DateTime.UtcNow,
+                };
+                _context.CategorizationUsages.Add(u);
+            }
+            else if (u.CategorizationHistoryId != pick.Id)
+            {
+                u.WasOverridden = DateTime.UtcNow;
+                u.CategorizationHistoryId = pick.Id;
+                u.UsedAt = DateTime.UtcNow;
+                u.WasOverridden = null;
+            }
+
+            // Synka transaktionens kategori
+            t.CategoryId = pick.CategoryId;
+
+            await _context.SaveChangesAsync(ct);
+            return null;
+        }
+
+        // -------- Helpers --------
+
+        private static bool MatchesSign(CategorizationHistory h, bool isPositiveTxn)
+        {
+            // null = båda
+            return h.IsPositive == null || h.IsPositive == isPositiveTxn;
+        }
+
+        private static bool InRange(CategorizationHistory h, decimal amount)
+        {
+            if (h.MinAmount is { } min && amount < min)
+                return false;
+            if (h.MaxAmount is { } max && amount > max)
+                return false;
+            // Om bara en av gränserna är satt, behandla den som enkel barriär
+            return true;
+        }
+    }
+}
+/* using Microsoft.EntityFrameworkCore;
+using PiggyzenMvp.API.Data;
+using PiggyzenMvp.API.Models;
+
+namespace PiggyzenMvp.API.Services
+{
+    public class CategorizationService
+    {
+        private readonly PiggyzenMvpContext _context;
+
+        public CategorizationService(PiggyzenMvpContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<string?> CategorizeAsync(string importId, int categoryId)
+        {
+            var transaction = await _context.Transactions.FirstOrDefaultAsync(t =>
+                t.ImportId == importId
+            );
+
+            if (transaction == null)
+                return $"Transaktion med ImportId \"{importId}\" hittades inte.";
+
+            if (transaction.CategoryId == categoryId)
+                return null; // Redan rätt kategori
+
+            // Hämta historik (eller skapa ny om ingen finns)
+            var normalized = Normalize(transaction.Description);
+            var history = await _context.CategorizationHistories.FirstOrDefaultAsync(h =>
+                h.NormalizedDescription == normalized
+            // && h.IsDescriptionAutoGenerated == transaction.IsDescriptionAutoGenerated
+            );
+
+            if (history == null)
+            {
+                history = new CategorizationHistory
+                {
+                    Description = transaction.Description,
+                    NormalizedDescription = normalized,
+                    // IsDescriptionAutoGenerated = transaction.IsDescriptionAutoGenerated,
+                    CategoryId = categoryId,
+                };
+                _context.CategorizationHistories.Add(history);
+            }
+
+            // Lägg till en usage-post
+            var usage = new CategorizationUsage
+            {
+                Amount = transaction.Amount,
+                TransactionDate = transaction.TransactionDate,
+                TransactionId = transaction.Id,
+                CategorizationHistory = history,
+                UsedAt = DateTime.UtcNow,
+            };
+
+            _context.CategorizationUsages.Add(usage);
+
+            // Uppdatera transaktionen
+            transaction.CategoryId = categoryId;
+
+            await _context.SaveChangesAsync();
+            return null;
+        }
+
+        private string Normalize(string input)
+        {
+            // Förenklad normalisering, kan anpassas
+            return input.Trim().ToLowerInvariant();
+        }
+    }
+
+    internal class ApplicationDbContext { }
+}
+ */

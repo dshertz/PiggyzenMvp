@@ -1,0 +1,307 @@
+@page "/import"
+@using System.Text
+@inject IHttpClientFactory HttpClientFactory
+@rendermode InteractiveServer
+
+<h1>Importera transaktioner</h1>
+
+<EditForm Model="@importRequest" OnValidSubmit="ImportTransactions">
+    <div class="mb-3">
+        <label for="rawText">Klistra in transaktionstext</label>
+        <InputTextArea id="rawText" class="form-control" @bind-Value="importRequest.RawText" rows="10" />
+    </div>
+
+    <button type="submit" class="btn btn-primary mt-2">Import</button>
+</EditForm>
+
+@if (importErrors?.Any() == true)
+{
+    <div class="alert alert-warning mt-4" style="white-space: pre-wrap;">
+        <strong>⚠️ Fel i importen:</strong>
+        <ul>
+            @foreach (var error in importErrors)
+            {
+                <li>@error</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (parsedTransactions?.Any() == true)
+{
+    <h2 class="mt-4">Importerade transaktioner</h2>
+    <table class="table table-sm table-bordered mt-2">
+        <thead>
+            <tr>
+                <th>Booking Date</th>
+                <th>Transaction Date</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Balance</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var tx in parsedTransactions)
+        {
+            <tr>
+                <td>@tx.BookingDate?.ToShortDateString()</td>
+                <td>@tx.TransactionDate.ToShortDateString()</td>
+                <td>@tx.Description</td>
+                <td>@tx.Amount.ToString("F2")</td>
+                <td>@(tx.Balance?.ToString("F2") ?? "")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger mt-4" style="white-space: pre-wrap;">
+        <strong>❌ Ett oväntat fel inträffade:</strong>
+        <br />@errorMessage
+    </div>
+}
+
+@code {
+    private TransactionImportRequest importRequest = new();
+    private List<TransactionImportDto>? parsedTransactions;
+    private List<string>? importErrors;
+    private string? errorMessage;
+
+    private async Task ImportTransactions()
+    {
+        errorMessage = null;
+        parsedTransactions = null;
+        importErrors = null;
+
+        if (string.IsNullOrWhiteSpace(importRequest.RawText))
+        {
+            errorMessage = "Du måste ange transaktionstext.";
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            var content = new StringContent(importRequest.RawText, Encoding.UTF8, "text/plain");
+
+            var response = await client.PostAsync("api/transactions/import", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ImportResult>();
+                parsedTransactions = result?.Transactions ?? new();
+                importErrors = result?.Errors ?? new();
+            }
+            else
+            {
+                var status = (int)response.StatusCode;
+                var reason = response.ReasonPhrase;
+                var contentType = response.Content.Headers.ContentType?.ToString();
+                var responseText = await response.Content.ReadAsStringAsync();
+
+                errorMessage =
+                    $"Status: {status} ({reason})\n" +
+                    $"Content-Type: {contentType}\n" +
+                    $"Svar:\n{responseText}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    public class TransactionImportRequest
+    {
+        public string RawText { get; set; } = "";
+    }
+
+    public class TransactionImportDto
+    {
+        public DateTime? BookingDate { get; set; }
+        public DateTime TransactionDate { get; set; }
+        public string Description { get; set; } = "";
+        public decimal Amount { get; set; }
+        public decimal? Balance { get; set; }
+    }
+
+    public class ImportResult
+    {
+        public List<TransactionImportDto> Transactions { get; set; } = new();
+        public List<string> Errors { get; set; } = new();
+    }
+}
+@* @page "/import"
+@using System.ComponentModel.DataAnnotations
+@using System.Text
+@using Microsoft.AspNetCore.Mvc
+@inject IHttpClientFactory HttpClientFactory
+@rendermode InteractiveServer
+
+<h1>Importera transaktioner</h1>
+
+<EditForm Model="@importRequest" OnValidSubmit="ImportTransactions">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label for="rawText">Klistra in transaktionstext</label>
+        <InputTextArea id="rawText" class="form-control" @bind-Value="importRequest.RawText" rows="10" />
+        <ValidationMessage For="@(() => importRequest.RawText)" />
+    </div>
+
+    <button type="submit" class="btn btn-primary mt-2">Import</button>
+</EditForm>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger mt-3">@errorMessage</div>
+}
+
+@if (parsedTransactions?.Any() == true)
+{
+    <h2 class="mt-4">Parsed Transactions</h2>
+    <table class="table table-sm table-bordered mt-2">
+        <thead>
+            <tr>
+                <th>Booking Date</th>
+                <th>Transaction Date</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Balance</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var tx in parsedTransactions)
+        {
+            <tr>
+                <td>@tx.BookingDate?.ToShortDateString()</td>
+                <td>@tx.TransactionDate.ToShortDateString()</td>
+                <td>@tx.Description</td>
+                <td>@tx.Amount.ToString("F2")</td>
+                <td>@(tx.Balance?.ToString("F2") ?? "")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private TransactionImportRequest importRequest = new();
+    private List<TransactionImportDto>? parsedTransactions;
+    private string? errorMessage;
+
+    private async Task ImportTransactions()
+    {
+        errorMessage = null;
+        parsedTransactions = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            var content = new StringContent(importRequest.RawText, Encoding.UTF8, "text/plain");
+
+            var response = await client.PostAsync("api/transactions/import", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                parsedTransactions = await response.Content.ReadFromJsonAsync<List<TransactionImportDto>>();
+            }
+            else
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+                errorMessage = problem?.Detail ?? "Importen misslyckades.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Något gick fel: {ex.Message}";
+        }
+    }
+
+    public class TransactionImportRequest
+    {
+        [Required(ErrorMessage = "Du måste ange transaktionstext.")]
+        public string RawText { get; set; } = "";
+    }
+} *@
+
+@* @page "/import"
+@using Microsoft.AspNetCore.Mvc
+@using System.Text
+@inject IHttpClientFactory HttpClientFactory
+@rendermode InteractiveServer
+
+<h1>Importera transaktioner</h1>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+<textarea class="form-control" @bind="@rawText" rows="10"></textarea>
+<button class="btn btn-primary mt-2" @onclick="ImportTransactions">Import</button>
+
+@if (parsedTransactions?.Any() == true)
+{
+    <h2 class="mt-4">Parsed Transactions</h2>
+    <table class="table table-sm table-bordered mt-2">
+        <thead>
+            <tr>
+                <th>Booking Date</th>
+                <th>Transaction Date</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Balance</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var tx in parsedTransactions)
+        {
+            <tr>
+                <td>@tx.BookingDate?.ToShortDateString()</td>
+                <td>@tx.TransactionDate.ToShortDateString()</td>
+                <td>@tx.Description</td>
+                <td>@tx.Amount.ToString("F2")</td>
+                <td>@(tx.Balance?.ToString("F2") ?? "")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private string rawText = "";
+    private List<TransactionImportDto>? parsedTransactions;
+    private string? errorMessage;
+
+    private async Task ImportTransactions()
+    {
+        errorMessage = null;
+        parsedTransactions = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            var content = new StringContent(rawText, Encoding.UTF8, "text/plain");
+
+            var response = await client.PostAsync("api/transactions/import", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                parsedTransactions = await response.Content.ReadFromJsonAsync<List<TransactionImportDto>>();
+            }
+            else
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+                errorMessage = problem?.Detail ?? "Importen misslyckades.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Något gick fel: {ex.Message}";
+        }
+    }
+} *@

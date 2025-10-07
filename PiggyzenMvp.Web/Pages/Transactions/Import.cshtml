@@ -1,0 +1,44 @@
+@page
+@model PiggyzenMvp.Web.Pages.Transactions.ImportModel
+@{
+    ViewData["Title"] = "Import Transactions";
+}
+
+<h1>Import Transactions</h1>
+
+<form method="post">
+    <div class="form-group">
+        <label for="RawText">Paste your transactions:</label>
+        <textarea id="RawText" name="RawText" rows="10" class="form-control">@Model.RawText</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary mt-2">Import</button>
+</form>
+
+@if (Model.ParsedTransactions?.Any() == true)
+{
+    <h2 class="mt-4">Parsed Transactions</h2>
+    <table class="table table-sm table-bordered mt-2">
+        <thead>
+            <tr>
+                <th>Booking Date</th>
+                <th>Transaction Date</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Balance</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var tx in Model.ParsedTransactions)
+        {
+            <tr>
+                <td>@tx.BookingDate?.ToShortDateString()</td>
+                <td>@tx.TransactionDate.ToShortDateString()</td>
+                <td>@tx.Description</td>
+                <td>@tx.Amount.ToString("F2")</td>
+                <td>@(tx.Balance?.ToString("F2") ?? "")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

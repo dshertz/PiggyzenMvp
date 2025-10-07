@@ -1,0 +1,296 @@
+@page "/categories"
+@rendermode InteractiveServer
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<h2>Kategorier</h2>
+
+<div class="mb-3 p-3 border rounded">
+  <h5>Skapa ny kategori</h5>
+  <div class="row g-2 align-items-end">
+    <div class="col-sm-5">
+      <label class="form-label">Namn</label>
+      <input class="form-control" @bind="createName" placeholder="t.ex. Livsmedel" />
+    </div>
+    <div class="col-sm-5">
+  <label class="form-label">Parent (krävs)</label>
+  <select class="form-select" @bind="createParentId">
+    <option value="">— välj systemkategori —</option>
+    @foreach (var c in (categories ?? new()))
+    {
+      if (c.IsSystemCategory)
+      {
+        <option value="@c.Id">@c.Name (@c.Id)</option>
+      }
+    }
+  </select>
+  <small class="text-muted">Underkategorier måste ligga under en systemkategori.</small>
+</div>
+<div class="col-sm-2 text-end">
+  <button type="button" class="btn btn-primary w-100"
+          @onclick="CreateCategory" disabled="@isBusy">Skapa</button>
+</div>
+  </div>
+  @if (!string.IsNullOrWhiteSpace(message))
+  {
+    <div class="mt-2"><small class="text-muted">@message</small></div>
+  }
+</div>
+
+@if (categories is null)
+{
+  <p><em>Laddar...</em></p>
+}
+else if (categories.Count == 0)
+{
+  <p>Inga kategorier hittades.</p>
+}
+else
+{
+  <table class="table table-sm table-striped align-middle">
+    <thead>
+      <tr>
+        <th style="width: 6rem;">Id</th>
+        <th>Namn</th>
+        <th style="width: 18rem;">Parent</th>
+        <th style="width: 10rem;">System</th>
+        <th style="width: 12rem;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      @foreach (var c in categories)
+      {
+        var isEditing = editId == c.Id;
+        var parentName = c.ParentCategoryId is null
+          ? "—"
+          : categories.FirstOrDefault(p => p.Id == c.ParentCategoryId)?.Name is string pn ? $"{pn} ({c.ParentCategoryId})" : $"{c.ParentCategoryId}";
+        <tr>
+          <td>@c.Id</td>
+
+          <td>
+            @if (isEditing)
+            {
+              <input class="form-control form-control-sm" @bind="editName" />
+            }
+            else
+            {
+              @c.Name
+            }
+          </td>
+
+          <td>
+            @if (isEditing)
+            {
+              <select class="form-select form-select-sm" @bind="editParentId" disabled="@c.IsSystemCategory">
+                <option value="">— ingen —</option>
+                @foreach (var p in categories)
+                {
+                  if (p.Id != c.Id && p.IsSystemCategory)  // endast system som parent
+                  {
+                    <option value="@p.Id">@p.Name (@p.Id)</option>
+                  }
+                }
+              </select>
+            }
+            else
+            {
+              @parentName
+            }
+          </td>
+
+          <td>
+            <span class="badge @(c.IsSystemCategory ? "bg-secondary" : "bg-light text-dark")">
+              @(c.IsSystemCategory ? "Ja" : "Nej")
+            </span>
+          </td>
+
+          <td class="text-end">
+            @if (isEditing)
+            {
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-success" @onclick="() => SaveEdit(c.Id)" disabled="@isBusy">Spara</button>
+                <button class="btn btn-outline-secondary" @onclick="CancelEdit" disabled="@isBusy">Avbryt</button>
+              </div>
+            }
+            else
+            {
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-primary" @onclick="() => StartEdit(c)" disabled="@c.IsSystemCategory">Redigera</button>
+                <button class="btn btn-outline-danger" @onclick="() => DeleteCategory(c.Id)" disabled="@c.IsSystemCategory">Ta bort</button>
+              </div>
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}
+
+@code {
+  // ===== DTOs (matchar API) =====
+  public class CategoryDto
+  {
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public int? ParentCategoryId { get; set; }
+    public bool IsSystemCategory { get; set; }
+  }
+
+  public class CreateCategoryRequest
+  {
+    public string Name { get; set; } = "";
+    public int? ParentCategoryId { get; set; }
+  }
+
+  public class UpdateCategoryRequest
+  {
+    public string? Name { get; set; }
+    public int? ParentCategoryId { get; set; }
+  }
+
+  // ===== State =====
+  private List<CategoryDto>? categories;
+  private bool isBusy;
+  private string? message;
+
+  // Create-form
+  private string createName = "";
+  private int? createParentId; // "" = ingen/ogiltigt
+
+  // Edit-state
+  private int? editId;
+  private string editName = "";
+  private string? editParentId;
+
+  protected override async Task OnInitializedAsync() => await LoadAsync();
+
+  private async Task LoadAsync()
+  {
+    try
+    {
+      var client = HttpClientFactory.CreateClient("ApiClient");
+      categories = await client.GetFromJsonAsync<List<CategoryDto>>("api/categories") ?? new();
+    }
+    catch (Exception ex)
+    {
+      Console.Error.WriteLine(ex);
+      categories = new();
+      message = "Kunde inte hämta kategorier.";
+    }
+    StateHasChanged();
+  }
+
+ private async Task CreateCategory()
+{
+    if (string.IsNullOrWhiteSpace(createName)) { message = "Ange namn."; return; }
+    if (createParentId is null)               { message = "Välj parent (systemkategori)."; return; }
+
+    try
+    {
+        isBusy = true;
+        message = null;
+
+        var client = HttpClientFactory.CreateClient("ApiClient");
+
+        var req = new CreateCategoryRequest
+        {
+            Name = createName.Trim(),
+            ParentCategoryId = createParentId
+        };
+
+        var resp = await client.PostAsJsonAsync("api/categories", req);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync();
+            message = $"Skapa misslyckades: {(int)resp.StatusCode} {body}";
+            return;
+        }
+
+        // reset och ladda om
+        createName = "";
+        createParentId = null;
+        await LoadAsync();
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine(ex);
+        message = "Ett fel uppstod vid skapande.";
+    }
+    finally { isBusy = false; }
+}
+
+  private void StartEdit(CategoryDto c)
+  {
+    editId = c.Id;
+    editName = c.Name;
+    editParentId = c.ParentCategoryId?.ToString();
+  }
+
+  private void CancelEdit()
+  {
+    editId = null;
+    editName = "";
+    editParentId = null;
+  }
+
+  private async Task SaveEdit(int id)
+  {
+    if (categories is null) return;
+
+    try
+    {
+      isBusy = true;
+      var client = HttpClientFactory.CreateClient("ApiClient");
+
+      var req = new UpdateCategoryRequest
+      {
+        Name = string.IsNullOrWhiteSpace(editName) ? null : editName.Trim(),
+        ParentCategoryId = string.IsNullOrEmpty(editParentId)
+          ? null
+          : (int.TryParse(editParentId, out var pid) ? pid : null)
+      };
+
+      var resp = await client.PutAsJsonAsync($"api/categories/{id}", req);
+      if (!resp.IsSuccessStatusCode)
+      {
+        var body = await resp.Content.ReadAsStringAsync();
+        message = $"Uppdatering misslyckades: {(int)resp.StatusCode} {body}";
+      }
+      else
+      {
+        await LoadAsync();
+        CancelEdit();
+      }
+    }
+    finally { isBusy = false; }
+  }
+
+  private async Task DeleteCategory(int id)
+  {
+    if (!await Confirm($"Ta bort kategori {id}?")) return;
+
+    try
+    {
+      isBusy = true;
+      var client = HttpClientFactory.CreateClient("ApiClient");
+      var resp = await client.DeleteAsync($"api/categories/{id}");
+      if (!resp.IsSuccessStatusCode)
+      {
+        var body = await resp.Content.ReadAsStringAsync();
+        message = $"Radering misslyckades: {(int)resp.StatusCode} {body}";
+      }
+      else
+      {
+        await LoadAsync();
+      }
+    }
+    finally { isBusy = false; }
+  }
+
+  // Hjälpare
+  private Task<bool> Confirm(string text)
+  {
+    Console.WriteLine($"CONFIRM: {text}");
+    return Task.FromResult(true);
+  }
+}

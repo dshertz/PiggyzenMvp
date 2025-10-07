@@ -1,0 +1,36 @@
+@page
+@model PiggyzenMvp.Web.Pages.Transactions.IndexModel
+@{
+    ViewData["Title"] = "Transaktioner";
+}
+
+<h2>Transaktioner</h2>
+
+@if (Model.Transactions.Count == 0)
+{
+    <p>Inga transaktioner hittades.</p>
+}
+else
+{
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr>
+                <th>Datum</th>
+                <th>Beskrivning</th>
+                <th>Belopp</th>
+                <th>Saldo</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var tx in Model.Transactions)
+            {
+                <tr>
+                    <td>@tx.TransactionDate.ToShortDateString()</td>
+                    <td>@tx.Description</td>
+                    <td>@tx.Amount</td>
+                    <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
