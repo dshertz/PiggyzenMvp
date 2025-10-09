@@ -22,6 +22,27 @@ builder.Services.AddControllers(options =>
 
 builder.Services.AddControllers();
 
+// CORS for local dev clients (Vite React, Blazor, Razor Pages)
+const string DevCorsPolicy = "DevCorsPolicy";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(DevCorsPolicy, policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:5173", // Vite (React)
+                "https://localhost:5173",
+                "http://localhost:7287", // Blazor Server
+                "https://localhost:7287",
+                "http://localhost:7257", // Razor Pages
+                "https://localhost:7257"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+        // .AllowCredentials(); // Uncomment if using cookies/auth
+    });
+});
+
 // Klassisk Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -43,6 +64,9 @@ else
 }
 
 // app.UseHttpsRedirection();
+
+// Enable CORS before auth and endpoints
+app.UseCors(DevCorsPolicy);
 
 app.UseAuthorization();
 
