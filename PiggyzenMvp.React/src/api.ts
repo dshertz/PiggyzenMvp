@@ -40,7 +40,7 @@ export async function createCategory(payload: {
   const response = await fetch(`${baseUrl}api/categories`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
   await handleResponse(response);
 }
@@ -52,14 +52,14 @@ export async function updateCategory(
   const response = await fetch(`${baseUrl}api/categories/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
   await handleResponse(response);
 }
 
 export async function deleteCategory(id: number): Promise<void> {
   const response = await fetch(`${baseUrl}api/categories/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
   });
   await handleResponse(response);
 }
@@ -68,19 +68,24 @@ export async function updateTransactionCategory(
   transactionId: number,
   categoryId: number
 ): Promise<void> {
-  const response = await fetch(`${baseUrl}api/transactions/${transactionId}/category`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ categoryId })
-  });
+  const response = await fetch(
+    `${baseUrl}api/transactions/${transactionId}/category`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categoryId }),
+    }
+  );
   await handleResponse(response);
 }
 
-export async function importTransactions(rawText: string): Promise<ImportResult> {
+export async function importTransactions(
+  rawText: string
+): Promise<ImportResult> {
   const response = await fetch(`${baseUrl}api/transactions/import`, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    body: rawText
+    body: rawText,
   });
   return handleResponse<ImportResult>(response);
 }
