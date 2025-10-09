@@ -19,6 +19,7 @@ Documents/
 .DS_Store
 
 # SQLite database
+*.db
 *.db*
 
 # Logs
