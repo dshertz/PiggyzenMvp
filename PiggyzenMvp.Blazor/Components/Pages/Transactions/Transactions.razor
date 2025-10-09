@@ -1,4 +1,5 @@
 @page "/transactions"
+@rendermode InteractiveServer
 @using System.Linq
 @inject IHttpClientFactory HttpClientFactory
 
@@ -38,18 +39,21 @@ else
         <tbody>
             @foreach (var tx in transactions)
             {
-                <tr>
+                <tr @key="tx.Id">
                     <td>@tx.TransactionDate.ToShortDateString()</td>
                     <td>@tx.Description</td>
                     <td>@tx.Amount.ToString("F2")</td>
                     <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
                     <td>@(tx.TypeName ?? "—")</td>
                     <td>
-                        <select class="form-select form-select-sm" @onchange="async e => await OnCategoryChanged(tx, e)" disabled="@savingTransactions.Contains(tx.Id)">
-                            <option value="" selected="@(tx.CategoryId is null ? "selected" : null)">—</option>
+                        <select class="form-select form-select-sm"
+                                value="@GetSelectedCategoryValue(tx)"
+                                @onchange="async e => await OnCategoryChanged(tx, e)"
+                                disabled="@savingTransactions.Contains(tx.Id)">
+                            <option value="">—</option>
                             @foreach (var category in categories)
                             {
-                                <option value="@category.Id" selected="@(tx.CategoryId == category.Id ? "selected" : null)">@GetCategoryDisplayName(category)</option>
+                                <option value="@category.Id">@GetCategoryDisplayName(category)</option>
                             }
                         </select>
                     </td>
@@ -138,7 +142,8 @@ else
         }
         else
         {
-            errorMessage = "Kunde inte uppdatera kategori.";
+            var details = await response.Content.ReadAsStringAsync();
+            errorMessage = $"Kunde inte uppdatera kategori. ({(int)response.StatusCode}) {details}";
         }
     }
     catch (Exception ex)
@@ -186,72 +191,3 @@ else
         }
     }
 }
-@* @page "/transactions"
-@inject IHttpClientFactory HttpClientFactory
-
-<h2>Transaktioner</h2>
-
-@if (transactions == null)
-{
-    <p><em>Laddar...</em></p>
-}
-else if (transactions.Count == 0)
-{
-    <p>Inga transaktioner hittades.</p>
-}
-else
-{
-    <table class="table table-bordered table-striped">
-        <thead>
-            <tr>
-                <th>Datum</th>
-                <th>Beskrivning</th>
-                <th>Belopp</th>
-                <th>Saldo</th>
-                <th>Type</th>
-                <th>Category</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var tx in transactions)
-            {
-                <tr>
-                    <td>@tx.TransactionDate.ToShortDateString()</td>
-                    <td>@tx.Description</td>
-                    <td>@tx.Amount.ToString("F2")</td>
-                    <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
-
-@code {
-    private List<TransactionDto>? transactions;
-
-    protected override async Task OnInitializedAsync()
-    {
-        try
-        {
-            var client = HttpClientFactory.CreateClient("ApiClient");
-            var response = await client.GetAsync("api/transactions");
-
-            if (response.IsSuccessStatusCode)
-            {
-                var data = await response.Content.ReadFromJsonAsync<List<TransactionDto>>();
-                transactions = data ?? new();
-            }
-            else
-            {
-                // Hantera fel: logga, visa meddelande, etc.
-                transactions = new();
-            }
-        }
-        catch (Exception ex)
-        {
-            // Logga eller visa fel till användaren
-            Console.Error.WriteLine($"Fel vid hämtning av transaktioner: {ex.Message}");
-            transactions = new();
-        }
-    }
-} *@

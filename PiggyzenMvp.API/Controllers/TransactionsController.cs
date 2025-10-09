@@ -136,7 +136,7 @@ public class TransactionsController : ControllerBase
         return Ok(new ImportResult { Transactions = importedDtos, Errors = _importService.Errors });
     }
 
-    [HttpPut("{id}/category")]
+    [HttpPut("{id:int}/category")]
     public async Task<IActionResult> SetCategory(int id, [FromBody] SetCategoryRequest req)
     {
         var transaction = await _context.Transactions.FindAsync(id);
