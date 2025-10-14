@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PiggyzenMvp.API", "Piggyzen
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PiggyzenMvp.Blazor", "PiggyzenMvp.Blazor\PiggyzenMvp.Blazor.csproj", "{B25E2E2A-2A0B-4696-A6F0-E329A641AB71}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PiggyzenMvp.Tests", "PiggyzenMvp.Tests\PiggyzenMvp.Tests.csproj", "{615F42AB-7892-43FB-9455-39A91761BE8B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,18 @@ Global
 		{B25E2E2A-2A0B-4696-A6F0-E329A641AB71}.Release|x64.Build.0 = Release|Any CPU
 		{B25E2E2A-2A0B-4696-A6F0-E329A641AB71}.Release|x86.ActiveCfg = Release|Any CPU
 		{B25E2E2A-2A0B-4696-A6F0-E329A641AB71}.Release|x86.Build.0 = Release|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Debug|x64.Build.0 = Debug|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Debug|x86.Build.0 = Debug|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Release|x64.ActiveCfg = Release|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Release|x64.Build.0 = Release|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Release|x86.ActiveCfg = Release|Any CPU
+		{615F42AB-7892-43FB-9455-39A91761BE8B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
