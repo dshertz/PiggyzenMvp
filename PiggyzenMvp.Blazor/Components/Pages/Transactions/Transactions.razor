@@ -5,6 +5,47 @@
 
 <h2>Transaktioner</h2>
 
+<div class="mb-4 d-flex flex-wrap align-items-end gap-3">
+    <div>
+        <label for="search" class="form-label mb-1">Sök</label>
+        <div class="input-group">
+            <input id="search"
+                   class="form-control"
+                   @bind="searchText"
+                   @bind:event="oninput"
+                   placeholder="Sök beskrivning..." />
+            <span class="input-group-text bg-white">
+                <i class="bi bi-search"></i>
+            </span>
+        </div>
+    </div>
+    <div>
+        <label class="form-label mb-1">Filtrera</label>
+        <div class="btn-group" role="group" aria-label="Filter">
+            <button type="button"
+                    class="btn btn-outline-primary @(filterCategory == "all" ? "active" : "")"
+                    @onclick='() => SetFilterCategory("all")'>
+                Alla
+            </button>
+            <button type="button"
+                    class="btn btn-outline-success @(filterCategory == "categorized" ? "active" : "")"
+                    @onclick='() => SetFilterCategory("categorized")'>
+                Kategoriserade
+            </button>
+            <button type="button"
+                    class="btn btn-outline-warning @(filterCategory == "uncategorized" ? "active" : "")"
+                    @onclick='() => SetFilterCategory("uncategorized")'>
+                Ej kategoriserade
+            </button>
+        </div>
+    </div>
+    <div class="ms-auto d-flex gap-2 align-items-center">
+        <span class="badge bg-success">Kategoriserade: @CategorizedCount</span>
+        <span class="badge bg-warning text-dark">Ej kategoriserade: @UncategorizedCount</span>
+        <span class="badge bg-info text-dark">Totalt: @(transactions?.Count ?? 0)</span>
+    </div>
+</div>
+
 @if (!string.IsNullOrWhiteSpace(errorMessage))
 {
     <div class="alert alert-danger" role="alert">@errorMessage</div>
@@ -19,7 +60,7 @@
 {
     <p><em>Laddar...</em></p>
 }
-else if (transactions.Count == 0)
+else if (FilteredTransactions.Count == 0)
 {
     <p>Inga transaktioner hittades.</p>
 }
@@ -37,7 +78,7 @@ else
             </tr>
         </thead>
         <tbody>
-            @foreach (var tx in transactions)
+            @foreach (var tx in FilteredTransactions)
             {
                 <tr @key="tx.Id">
                     <td>@tx.TransactionDate.ToShortDateString()</td>
@@ -70,6 +111,27 @@ else
     private string? errorMessage;
     private string? successMessage;
 
+    // Filter state
+    private string searchText = "";
+    private string filterCategory = "all";
+
+    // Filtrerad lista
+    private List<TransactionDto> FilteredTransactions =>
+        transactions?
+            .Where(tx =>
+                (string.IsNullOrWhiteSpace(searchText) || tx.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
+                (filterCategory == "all" ||
+                 (filterCategory == "categorized" && tx.CategoryId != null) ||
+                 (filterCategory == "uncategorized" && tx.CategoryId == null))
+            )
+            .OrderByDescending(t => t.TransactionDate)
+            .ToList()
+        ?? new();
+
+    // Status info
+    private int CategorizedCount => transactions?.Count(tx => tx.CategoryId != null) ?? 0;
+    private int UncategorizedCount => transactions?.Count(tx => tx.CategoryId == null) ?? 0;
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -82,7 +144,6 @@ else
             await Task.WhenAll(txTask!, catTask!);
 
             transactions = txTask?.Result ?? new();
-            transactions = transactions.OrderByDescending(t => t.TransactionDate).ToList();
             categories = catTask?.Result ?? new();
         }
         catch (Exception ex)
@@ -112,51 +173,51 @@ else
     }
 
     private async Task OnCategoryChanged(TransactionDto tx, ChangeEventArgs e)
-{
-    var rawValue = e.Value?.ToString();
-    if (string.IsNullOrWhiteSpace(rawValue))
-        return;
-
-    if (!int.TryParse(rawValue, out var categoryId))
-        return;
-
-    savingTransactions.Add(tx.Id);
-    successMessage = null;
-    errorMessage = null;
-    StateHasChanged();
-
-    try
     {
-        var client = HttpClientFactory.CreateClient("ApiClient");
-        var request = new SetCategoryRequest(categoryId);
+        var rawValue = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(rawValue))
+            return;
 
-        var response = await client.PutAsJsonAsync(
-            $"api/transactions/{tx.Id}/category",
-            request
-        );
+        if (!int.TryParse(rawValue, out var categoryId))
+            return;
 
-        if (response.IsSuccessStatusCode)
-        {
-            tx.CategoryId = categoryId;
-            UpdateCategoryFields(tx);
-            successMessage = "Kategori uppdaterad!";
-        }
-        else
-        {
-            var details = await response.Content.ReadAsStringAsync();
-            errorMessage = $"Kunde inte uppdatera kategori. ({(int)response.StatusCode}) {details}";
-        }
-    }
-    catch (Exception ex)
-    {
-        errorMessage = ex.Message;
-    }
-    finally
-    {
-        savingTransactions.Remove(tx.Id);
+        savingTransactions.Add(tx.Id);
+        successMessage = null;
+        errorMessage = null;
         StateHasChanged();
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            var request = new SetCategoryRequest(categoryId);
+
+            var response = await client.PutAsJsonAsync(
+                $"api/transactions/{tx.Id}/category",
+                request
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                tx.CategoryId = categoryId;
+                UpdateCategoryFields(tx);
+                successMessage = "Kategori uppdaterad!";
+            }
+            else
+            {
+                var details = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Kunde inte uppdatera kategori. ({(int)response.StatusCode}) {details}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            savingTransactions.Remove(tx.Id);
+            StateHasChanged();
+        }
     }
-}
 
     private void UpdateCategoryFields(TransactionDto tx)
     {
@@ -190,5 +251,10 @@ else
             tx.TypeId = null;
             tx.TypeName = null;
         }
+    }
+
+    private void SetFilterCategory(string category)
+    {
+        filterCategory = category;
     }
 }
