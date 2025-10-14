@@ -82,6 +82,7 @@ else
             await Task.WhenAll(txTask!, catTask!);
 
             transactions = txTask?.Result ?? new();
+            transactions = transactions.OrderByDescending(t => t.TransactionDate).ToList();
             categories = catTask?.Result ?? new();
         }
         catch (Exception ex)
