@@ -133,7 +133,7 @@ namespace PiggyzenMvp.API.Controllers
 
             var inUse =
                 await _context.Transactions.AnyAsync(t => t.CategoryId == id, ct)
-                || await _context.CategorizationHistories.AnyAsync(h => h.CategoryId == id, ct);
+                || await _context.CategorizationRules.AnyAsync(h => h.CategoryId == id, ct);
             if (inUse)
                 return BadRequest(new { Message = "Category in use." });
 

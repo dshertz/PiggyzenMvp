@@ -1,7 +1,6 @@
 namespace PiggyzenMvp.API.Models
 {
-    // Kanske byta namn till CategorizationRule eller liknande?
-    public class CategorizationHistory
+    public class CategorizationRule
     {
         public int Id { get; set; }
 
@@ -49,8 +48,8 @@ namespace PiggyzenMvp.API.Models
         public int TransactionId { get; set; }
         public Transaction Transaction { get; set; } = null!;
 
-        public int CategorizationHistoryId { get; set; }
-        public CategorizationHistory CategorizationHistory { get; set; } = null!;
+        public int CategorizationRuleId { get; set; }
+        public CategorizationRule CategorizationRule { get; set; } = null!;
 
         public DateTime UsedAt { get; set; } = DateTime.UtcNow;
 

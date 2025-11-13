@@ -5,12 +5,12 @@ namespace PiggyzenMvp.API.Data
 {
     public class PiggyzenMvpContext : DbContext
     {
-        public PiggyzenMvpContext(DbContextOptions options)
+        public PiggyzenMvpContext(DbContextOptions<PiggyzenMvpContext> options)
             : base(options) { }
 
         public DbSet<Transaction> Transactions { get; set; }
         public DbSet<Category> Categories { get; set; }
-        public DbSet<CategorizationHistory> CategorizationHistories { get; set; }
+        public DbSet<CategorizationRule> CategorizationRules { get; set; }
         public DbSet<CategorizationUsage> CategorizationUsages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -39,14 +39,14 @@ namespace PiggyzenMvp.API.Data
             // Usage → History (N:1) + koppla till navigationen Usages
             modelBuilder
                 .Entity<CategorizationUsage>()
-                .HasOne(u => u.CategorizationHistory)
+                .HasOne(u => u.CategorizationRule)
                 .WithMany(h => h.Usages)
-                .HasForeignKey(u => u.CategorizationHistoryId)
+                .HasForeignKey(u => u.CategorizationRuleId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // History → Category
             modelBuilder
-                .Entity<CategorizationHistory>()
+                .Entity<CategorizationRule>()
                 .HasOne(h => h.Category)
                 .WithMany()
                 .HasForeignKey(h => h.CategoryId)
@@ -54,23 +54,23 @@ namespace PiggyzenMvp.API.Data
 
             // Index & kolumndefinitioner (prestanda/hygien)
             modelBuilder
-                .Entity<CategorizationHistory>()
+                .Entity<CategorizationRule>()
                 .Property(h => h.Description)
                 .HasMaxLength(512);
             modelBuilder
-                .Entity<CategorizationHistory>()
+                .Entity<CategorizationRule>()
                 .Property(h => h.NormalizedDescription)
                 .HasMaxLength(256);
-            modelBuilder.Entity<CategorizationHistory>().HasIndex(h => h.NormalizedDescription);
+            modelBuilder.Entity<CategorizationRule>().HasIndex(h => h.NormalizedDescription);
             modelBuilder
-                .Entity<CategorizationHistory>()
+                .Entity<CategorizationRule>()
                 .HasIndex(h => new { h.NormalizedDescription, h.IsPositive });
             modelBuilder
-                .Entity<CategorizationHistory>()
+                .Entity<CategorizationRule>()
                 .Property(h => h.MinAmount)
                 .HasColumnType("decimal(18,2)");
             modelBuilder
-                .Entity<CategorizationHistory>()
+                .Entity<CategorizationRule>()
                 .Property(h => h.MaxAmount)
                 .HasColumnType("decimal(18,2)");
             modelBuilder
