@@ -1,5 +1,6 @@
 namespace PiggyzenMvp.API.Models
 {
+    // Kanske byta namn till CategorizationRule eller liknande?
     public class CategorizationHistory
     {
         public int Id { get; set; }
@@ -32,8 +33,6 @@ namespace PiggyzenMvp.API.Models
 
         // Statistik (kan uppdateras efter varje matchning)
         public int TimesUsed { get; set; } = 0;
-        public int TimesConfirmed { get; set; } = 0;
-        public int TimesOverridden { get; set; } = 0;
         public DateTime? LastUsedAt { get; set; }
 
         // Navigering till kopplingar (CategorizationUsage)

@@ -136,24 +136,26 @@ public class TransactionsController : ControllerBase
         return Ok(new ImportResult { Transactions = importedDtos, Errors = _importService.Errors });
     }
 
-    [HttpPut("{id:int}/category")]
-    public async Task<IActionResult> SetCategory(int id, [FromBody] SetCategoryRequest req)
-    {
-        var transaction = await _context.Transactions.FindAsync(id);
-        if (transaction == null)
-            return NotFound(new { Message = "Transaction not found." });
+    //Kategorisering av en transaktion
+    /*  [HttpPut("{id:int}/category")]
+     public async Task<IActionResult> SetCategory(int id, [FromBody] SetCategoryRequest req)
+     {
+         var transaction = await _context.Transactions.FindAsync(id);
+         if (transaction == null)
+             return NotFound(new { Message = "Transaction not found." });
+ 
+         var category = await _context.Categories.FindAsync(req.CategoryId);
+         if (category == null)
+             return NotFound(new { Message = "Category not found." });
+ 
+         transaction.CategoryId = req.CategoryId;
+         await _context.SaveChangesAsync();
+ 
+         return NoContent();
+     } */
 
-        var category = await _context.Categories.FindAsync(req.CategoryId);
-        if (category == null)
-            return NotFound(new { Message = "Category not found." });
-
-        transaction.CategoryId = req.CategoryId;
-        await _context.SaveChangesAsync();
-
-        return NoContent();
-    }
-
-    [HttpPost("{id:int}/categorize")]
+    //Utbytt mot endpoint som tar emot lista
+    /* [HttpPost("{id:int}/categorize")]
     public async Task<IActionResult> CategorizeById(
         int id,
         [FromBody] CategorizeRequest req,
@@ -168,11 +170,71 @@ public class TransactionsController : ControllerBase
         if (!catExists)
             return NotFound(new { Message = $"Category {req.CategoryId} not found." });
 
-        var err = await _categorizationService.CategorizeAsync(tx.ImportId, req.CategoryId, ct);
+        var err = await _categorizationService.CategorizeManuallyAsync(
+            tx.ImportId,
+            req.CategoryId,
+            ct
+        );
         if (err != null)
             return BadRequest(new { Message = err });
 
         return NoContent();
+    } */
+    // Kanske begränsa antal transaktioner som kan kategoriseras i en request?
+    [HttpPost("categorize")]
+    public async Task<IActionResult> CategorizeMany(
+        [FromBody] List<CategorizeRequest> requests,
+        CancellationToken ct
+    )
+    {
+        if (requests == null || requests.Count == 0)
+            return BadRequest(new { Message = "Minst en transaktion måste skickas in." });
+        var transactionIds = requests.Select(r => r.TransactionId).Distinct().ToList();
+        var transactions = await _context
+            .Transactions.Where(t => transactionIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, ct);
+        var categoryIds = requests.Select(r => r.CategoryId).Distinct().ToList();
+        var categories = await _context
+            .Categories.Where(c => categoryIds.Contains(c.Id))
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+        var categorized = 0;
+        var errors = new List<object>();
+        foreach (var req in requests)
+        {
+            if (!transactions.TryGetValue(req.TransactionId, out var transaction))
+            {
+                errors.Add(
+                    new
+                    {
+                        Message = $"Transaction {req.TransactionId} not found.",
+                        req.TransactionId,
+                    }
+                );
+                continue;
+            }
+            if (!categories.Contains(req.CategoryId))
+            {
+                errors.Add(
+                    new { Message = $"Category {req.CategoryId} not found.", req.TransactionId }
+                );
+                continue;
+            }
+            var err = await _categorizationService.CategorizeManuallyAsync(
+                transaction.ImportId,
+                req.CategoryId,
+                ct
+            );
+            if (err != null)
+            {
+                errors.Add(new { Message = err, req.TransactionId });
+                continue;
+            }
+            categorized++;
+        }
+        if (categorized == 0 && errors.Count > 0)
+            return BadRequest(new { Message = "Inga transaktioner kategoriserades.", errors });
+        return Ok(new { categorized, errors });
     }
 
     [HttpPost("auto-categorize-missing")]
@@ -198,7 +260,7 @@ public class TransactionsController : ControllerBase
         foreach (var item in batch)
         {
             processed++;
-            var err = await _categorizationService.AutoCategorizeAsync(item.ImportId, ct);
+            var err = await _categorizationService.CategorizeAutomaticallyAsync(item.ImportId, ct);
             if (err == null)
             {
                 var nowCat = await _context

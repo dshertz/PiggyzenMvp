@@ -16,12 +16,11 @@ namespace PiggyzenMvp.API.Services
         }
 
         /// <summary>
-        /// Manuell kategorisering av en transaktion.
-        /// - 1:1 usage: återanvänd eller skapa usage.
-        /// - Upsert av CH på (NormalizedDescription, IsPositive, CategoryId).
-        /// - Synkar Transaction.CategoryId.
+        /// Manuell kategorisering av en transaktion (admin/UX-val).
+        /// - Skapar eller uppdaterar en historikrad kopplad till manuellt val.
+        /// - Säkerställer att Transaktionen och dess Usage pekar på den manuella regeln.
         /// </summary>
-        public async Task<string?> CategorizeAsync(
+        public async Task<string?> CategorizeManuallyAsync(
             string importId,
             int categoryId,
             CancellationToken ct = default
@@ -97,14 +96,13 @@ namespace PiggyzenMvp.API.Services
         }
 
         /// <summary>
-        /// Auto-kategorisera en transaktion baserat på historik (utan att ange kategori).
+        /// Auto-kategoriserar en transaktion baserat på sparad historik/regler.
         /// Matchningsordning:
         ///  1) norm + tecken + beloppsintervall som inkluderar amount
         ///  2) norm + tecken (utan intervall)
         ///  3) norm (IsPositive=null i CH)
-        /// Sätter Transaction.CategoryId och Usage till vald CH.
         /// </summary>
-        public async Task<string?> AutoCategorizeAsync(
+        public async Task<string?> CategorizeAutomaticallyAsync(
             string importId,
             CancellationToken ct = default
         )
