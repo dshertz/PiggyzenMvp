@@ -55,5 +55,13 @@ namespace PiggyzenMvp.API.Models
 
         // Möjlighet till omkoppling:
         public DateTime? WasOverridden { get; set; }
+        public CategorizationSource? Source { get; set; }
+    }
+
+    public enum CategorizationSource
+    {
+        Auto = 0,
+        Manual = 1,
+        AI = 2,
     }
 }
