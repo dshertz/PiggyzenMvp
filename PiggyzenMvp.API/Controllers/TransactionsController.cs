@@ -181,59 +181,38 @@ public class TransactionsController : ControllerBase
         return NoContent();
     } */
     // Kanske begränsa antal transaktioner som kan kategoriseras i en request?
-    [HttpPost("categorize")]
-    public async Task<IActionResult> CategorizeMany(
-        [FromBody] List<CategorizeRequest> requests,
+    [HttpPost("manual-categorize")]
+    public async Task<IActionResult> ManualCategorize(
+        [FromBody] IReadOnlyCollection<CategorizeRequest>? requests,
         CancellationToken ct
     )
     {
         if (requests == null || requests.Count == 0)
             return BadRequest(new { Message = "Minst en transaktion måste skickas in." });
-        var transactionIds = requests.Select(r => r.TransactionId).Distinct().ToList();
-        var transactions = await _context
-            .Transactions.Where(t => transactionIds.Contains(t.Id))
-            .ToDictionaryAsync(t => t.Id, ct);
-        var categoryIds = requests.Select(r => r.CategoryId).Distinct().ToList();
-        var categories = await _context
-            .Categories.Where(c => categoryIds.Contains(c.Id))
-            .Select(c => c.Id)
-            .ToListAsync(ct);
+
         var categorized = 0;
         var errors = new List<object>();
+
         foreach (var req in requests)
         {
-            if (!transactions.TryGetValue(req.TransactionId, out var transaction))
-            {
-                errors.Add(
-                    new
-                    {
-                        Message = $"Transaction {req.TransactionId} not found.",
-                        req.TransactionId,
-                    }
-                );
-                continue;
-            }
-            if (!categories.Contains(req.CategoryId))
-            {
-                errors.Add(
-                    new { Message = $"Category {req.CategoryId} not found.", req.TransactionId }
-                );
-                continue;
-            }
             var err = await _categorizationService.CategorizeManuallyAsync(
-                transaction.ImportId,
+                req.TransactionId,
                 req.CategoryId,
                 ct
             );
+
             if (err != null)
             {
-                errors.Add(new { Message = err, req.TransactionId });
+                errors.Add(new { req.TransactionId, Message = err });
                 continue;
             }
+
             categorized++;
         }
-        if (categorized == 0 && errors.Count > 0)
+
+        if (categorized == 0)
             return BadRequest(new { Message = "Inga transaktioner kategoriserades.", errors });
+
         return Ok(new { categorized, errors });
     }
 
