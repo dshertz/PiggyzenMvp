@@ -1,6 +1,8 @@
 @page "/transactions"
 @rendermode InteractiveServer
 @using System.Linq
+@using PiggyzenMvp.Blazor.DTOs
+@using PiggyzenMvp.Blazor.DTOs.Transactions
 @inject IHttpClientFactory HttpClientFactory
 
 <h2>Transaktioner</h2>
@@ -56,6 +58,35 @@
     <div class="alert alert-success" role="alert">@successMessage</div>
 }
 
+@if (selectedTransactionIds.Count > 0)
+{
+    <div class="alert alert-info d-flex flex-column flex-md-row align-items-md-end gap-3" role="alert">
+        <div>
+            <strong>@selectedTransactionIds.Count</strong> transaktion(er) markerade.
+        </div>
+        <div class="flex-grow-1">
+            <label class="form-label mb-1">Välj kategori</label>
+            <select class="form-select form-select-sm"
+                    value="@GetSelectedBulkCategoryValue()"
+                    @onchange="OnBulkCategoryChanged">
+                <option value="">— Välj kategori —</option>
+                @foreach (var category in categories)
+                {
+                    <option value="@category.Id">@GetCategoryDisplayName(category)</option>
+                }
+            </select>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-primary"
+                    @onclick="CategorizeSelectedAsync"
+                    disabled="@IsBulkActionDisabled">
+                @(isBulkCategorizing ? "Kategoriserar..." : $"Kategorisera {selectedTransactionIds.Count}")
+            </button>
+            <button class="btn btn-link text-decoration-none" type="button" @onclick="ClearSelection">Rensa markering</button>
+        </div>
+    </div>
+}
+
 @if (transactions is null)
 {
     <p><em>Laddar...</em></p>
@@ -69,6 +100,12 @@ else
     <table class="table table-bordered table-striped">
         <thead>
             <tr>
+                <th style="width: 48px;">
+                    <input type="checkbox"
+                           class="form-check-input"
+                           @onchange="ToggleSelectAllFiltered"
+                           checked="@AreAllEligibleFilteredSelected" />
+                </th>
                 <th>Datum</th>
                 <th>Beskrivning</th>
                 <th>Belopp</th>
@@ -81,23 +118,20 @@ else
             @foreach (var tx in FilteredTransactions)
             {
                 <tr @key="tx.Id">
+                    <td class="text-center">
+                        <input type="checkbox"
+                               class="form-check-input"
+                               checked="@IsSelected(tx.Id)"
+                               disabled="@(tx.CategoryId != null)"
+                               title="Endast transaktioner utan kategori kan markeras"
+                               @onchange="e => ToggleSelection(tx.Id, e)" />
+                    </td>
                     <td>@tx.TransactionDate.ToShortDateString()</td>
                     <td>@tx.Description</td>
                     <td>@tx.Amount.ToString("F2")</td>
                     <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
                     <td>@(tx.TypeName ?? "—")</td>
-                    <td>
-                        <select class="form-select form-select-sm"
-                                value="@GetSelectedCategoryValue(tx)"
-                                @onchange="async e => await OnCategoryChanged(tx, e)"
-                                disabled="@savingTransactions.Contains(tx.Id)">
-                            <option value="">—</option>
-                            @foreach (var category in categories)
-                            {
-                                <option value="@category.Id">@GetCategoryDisplayName(category)</option>
-                            }
-                        </select>
-                    </td>
+                    <td>@(tx.CategoryName ?? "Ej vald")</td>
                 </tr>
             }
         </tbody>
@@ -107,7 +141,9 @@ else
 @code {
     private List<TransactionDto>? transactions;
     private List<CategoryDto> categories = new();
-    private HashSet<int> savingTransactions = new();
+    private HashSet<int> selectedTransactionIds = new();
+    private int? bulkCategoryId;
+    private bool isBulkCategorizing;
     private string? errorMessage;
     private string? successMessage;
 
@@ -155,9 +191,6 @@ else
         }
     }
 
-    private string GetSelectedCategoryValue(TransactionDto tx) =>
-        tx.CategoryId?.ToString() ?? string.Empty;
-
     private string GetCategoryDisplayName(CategoryDto category)
     {
         if (category.ParentCategoryId is int parentId)
@@ -172,16 +205,82 @@ else
         return category.Name;
     }
 
-    private async Task OnCategoryChanged(TransactionDto tx, ChangeEventArgs e)
+    private string GetSelectedBulkCategoryValue() =>
+        bulkCategoryId?.ToString() ?? string.Empty;
+
+    private bool AreAllEligibleFilteredSelected
+    {
+        get
+        {
+            var filtered = FilteredTransactions.Where(t => t.CategoryId == null).ToList();
+            if (filtered.Count == 0)
+                return false;
+
+            return filtered.All(t => selectedTransactionIds.Contains(t.Id));
+        }
+    }
+
+    private bool IsSelected(int transactionId) => selectedTransactionIds.Contains(transactionId);
+
+    private void ToggleSelection(int transactionId, ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool b && b;
+        if (isChecked)
+        {
+            selectedTransactionIds.Add(transactionId);
+        }
+        else
+        {
+            selectedTransactionIds.Remove(transactionId);
+        }
+    }
+
+    private void ToggleSelectAllFiltered(ChangeEventArgs e)
+    {
+        var filtered = FilteredTransactions.Where(t => t.CategoryId == null).ToList();
+        var selectAll = e.Value is bool b && b;
+
+        if (selectAll)
+        {
+            foreach (var tx in filtered)
+                selectedTransactionIds.Add(tx.Id);
+        }
+        else
+        {
+            foreach (var tx in filtered)
+                selectedTransactionIds.Remove(tx.Id);
+        }
+    }
+
+    private void OnBulkCategoryChanged(ChangeEventArgs e)
     {
         var rawValue = e.Value?.ToString();
         if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            bulkCategoryId = null;
+            return;
+        }
+
+        bulkCategoryId = int.TryParse(rawValue, out var value) ? value : null;
+    }
+
+    private bool IsBulkActionDisabled =>
+        isBulkCategorizing || bulkCategoryId is null || selectedTransactionIds.Count == 0;
+
+    private void ClearSelection()
+    {
+        selectedTransactionIds.Clear();
+    }
+
+    private async Task CategorizeSelectedAsync()
+    {
+        if (transactions is null)
             return;
 
-        if (!int.TryParse(rawValue, out var categoryId))
+        if (bulkCategoryId is null || selectedTransactionIds.Count == 0)
             return;
 
-        savingTransactions.Add(tx.Id);
+        isBulkCategorizing = true;
         successMessage = null;
         errorMessage = null;
         StateHasChanged();
@@ -189,23 +288,54 @@ else
         try
         {
             var client = HttpClientFactory.CreateClient("ApiClient");
-            var request = new SetCategoryRequest(categoryId);
+            var requests = selectedTransactionIds
+                .Select(id => new CategorizeRequest(id, bulkCategoryId.Value))
+                .ToList();
 
-            var response = await client.PutAsJsonAsync(
-                $"api/transactions/{tx.Id}/category",
-                request
+            var response = await client.PostAsJsonAsync(
+                "api/transactions/manual-categorize",
+                requests
             );
 
-            if (response.IsSuccessStatusCode)
-            {
-                tx.CategoryId = categoryId;
-                UpdateCategoryFields(tx);
-                successMessage = "Kategori uppdaterad!";
-            }
-            else
+            if (!response.IsSuccessStatusCode)
             {
                 var details = await response.Content.ReadAsStringAsync();
-                errorMessage = $"Kunde inte uppdatera kategori. ({(int)response.StatusCode}) {details}";
+                errorMessage = $"Kunde inte kategorisera valda transaktioner. ({(int)response.StatusCode}) {details}";
+                return;
+            }
+
+            var result =
+                await response.Content.ReadFromJsonAsync<ManualCategorizeResponse>()
+                ?? new ManualCategorizeResponse();
+
+            var failedIds = result.Errors.Select(e => e.TransactionId).ToHashSet();
+
+            foreach (var id in selectedTransactionIds.ToList())
+            {
+                if (failedIds.Contains(id))
+                    continue;
+
+                var tx = transactions.FirstOrDefault(t => t.Id == id);
+                if (tx is null)
+                    continue;
+
+                tx.CategoryId = bulkCategoryId;
+                UpdateCategoryFields(tx);
+                selectedTransactionIds.Remove(id);
+            }
+
+            successMessage =
+                result.Categorized > 0
+                    ? $"Kategoriserade {result.Categorized} transaktion(er)."
+                    : null;
+
+            if (result.Errors.Count > 0)
+            {
+                var errorList = string.Join(
+                    ", ",
+                    result.Errors.Select(e => $"{e.TransactionId}: {e.Message}")
+                );
+                errorMessage = $"Vissa transaktioner kunde inte kategoriseras: {errorList}";
             }
         }
         catch (Exception ex)
@@ -214,7 +344,7 @@ else
         }
         finally
         {
-            savingTransactions.Remove(tx.Id);
+            isBulkCategorizing = false;
             StateHasChanged();
         }
     }
