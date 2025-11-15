@@ -290,12 +290,15 @@ else
             var manualTargets = selected.Where(t => t.CategoryId == null).ToList();
             var changeTargets = selected.Where(t => t.CategoryId != null).ToList();
 
-            ManualCategorizeResponse? manualResult = null;
-            ChangeCategoryResponse? changeResult = null;
+            var categorizedCount = 0;
+            var updatedCount = 0;
+            var autoCategorizedCount = 0;
+            var combinedErrors = new List<ManualCategorizeError>();
 
-            if (manualTargets.Count > 0)
+            // Process uncategorized (manual) grouped by sign to satisfy backend validation
+            foreach (var group in manualTargets.GroupBy(t => t.Amount >= 0m))
             {
-                var manualRequests = manualTargets
+                var manualRequests = group
                     .Select(t => new CategorizeRequest(t.Id, bulkCategoryId.Value))
                     .ToList();
 
@@ -312,13 +315,17 @@ else
                     return;
                 }
 
-                manualResult =
+                var manualResult =
                     await manualResponse.Content.ReadFromJsonAsync<ManualCategorizeResponse>()
                     ?? new ManualCategorizeResponse();
 
+                categorizedCount += manualResult.Categorized;
+                autoCategorizedCount += manualResult.AutoCategorized;
+                combinedErrors.AddRange(manualResult.Errors);
+
                 var manualFailedIds = manualResult.Errors.Select(e => e.TransactionId).ToHashSet();
 
-                foreach (var tx in manualTargets)
+                foreach (var tx in group)
                 {
                     if (manualFailedIds.Contains(tx.Id))
                         continue;
@@ -329,9 +336,10 @@ else
                 }
             }
 
-            if (changeTargets.Count > 0)
+            // Process already categorized (change) grouped by sign to satisfy backend validation
+            foreach (var group in changeTargets.GroupBy(t => t.Amount >= 0m))
             {
-                var changeRequests = changeTargets
+                var changeRequests = group
                     .Select(t => new ChangeCategoryRequest(t.Id, bulkCategoryId.Value))
                     .ToList();
 
@@ -348,13 +356,18 @@ else
                     return;
                 }
 
-                changeResult =
+                var changeResult =
                     await changeResponse.Content.ReadFromJsonAsync<ChangeCategoryResponse>()
                     ?? new ChangeCategoryResponse();
 
+                updatedCount += changeResult.Updated;
                 var changeFailedIds = changeResult.Errors.Select(e => e.TransactionId).ToHashSet();
+                var changeErrors = changeResult.Errors
+                    .Select(e => new ManualCategorizeError { TransactionId = e.TransactionId, Message = e.Message })
+                    .ToList();
+                combinedErrors.AddRange(changeErrors);
 
-                foreach (var tx in changeTargets)
+                foreach (var tx in group)
                 {
                     if (changeFailedIds.Contains(tx.Id))
                         continue;
@@ -364,10 +377,6 @@ else
                     selectedTransactionIds.Remove(tx.Id);
                 }
             }
-
-            var categorizedCount = manualResult?.Categorized ?? 0;
-            var updatedCount = changeResult?.Updated ?? 0;
-            var autoCategorizedCount = manualResult?.AutoCategorized ?? 0;
 
             var successParts = new List<string>();
             if (categorizedCount > 0)
@@ -385,12 +394,6 @@ else
                 await RefreshTransactionsAsync();
                 selectedTransactionIds.Clear();
             }
-
-            var combinedErrors = new List<ManualCategorizeError>();
-            if (manualResult != null)
-                combinedErrors.AddRange(manualResult.Errors);
-            if (changeResult != null)
-                combinedErrors.AddRange(changeResult.Errors);
 
             if (combinedErrors.Count > 0)
             {
