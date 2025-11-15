@@ -65,14 +65,15 @@ namespace PiggyzenMvp.API.Data
             modelBuilder
                 .Entity<CategorizationRule>()
                 .HasIndex(h => new { h.NormalizedDescription, h.IsPositive });
-            modelBuilder
-                .Entity<CategorizationRule>()
-                .Property(h => h.MinAmount)
-                .HasColumnType("decimal(18,2)");
-            modelBuilder
-                .Entity<CategorizationRule>()
-                .Property(h => h.MaxAmount)
-                .HasColumnType("decimal(18,2)");
+            // Beloppsgränser används inte just nu – lämnas kommenterade för framtida stöd.
+            // modelBuilder
+            //     .Entity<CategorizationRule>()
+            //     .Property(h => h.MinAmount)
+            //     .HasColumnType("decimal(18,2)");
+            // modelBuilder
+            //     .Entity<CategorizationRule>()
+            //     .Property(h => h.MaxAmount)
+            //     .HasColumnType("decimal(18,2)");
             modelBuilder
                 .Entity<CategorizationUsage>()
                 .Property(u => u.Amount)

@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace PiggyzenMvp.API.Models
 {
     public class CategorizationRule
@@ -17,10 +19,29 @@ namespace PiggyzenMvp.API.Models
         public bool? IsPositive { get; set; } // true = endast +belopp, false = endast –belopp, null = båda
 
         // Beloppsintervall (valfritt)
-        public decimal? MinAmount { get; set; }
-        public decimal? MaxAmount { get; set; }
+        // Används inte just nu.
+        /* 1. MinAmount/MaxAmount ska användas sparsamt (endast när det finns tydliga kluster)
+
+Vi kom fram till att beloppsintervall kan vara värdefullt i vissa specifika fall – men att det är riskabelt att använda dem som primära beslutsregler.
+
+Beloppsintervall är bra när:
+    •	Du har ett tydligt, stabilt beloppsmönster
+(Circle K tankning: –650 till –900)
+    •	Användaren har konsekventa lågbeloppsköp på samma merchant
+(Circle K snacks: –15 till –120)
+    •	Du har ett unikt kluster som skiljer kategorierna åt
+(Släpvagn: –280 till –400)
+
+Beloppsintervall är inte bra när:
+    •	Beloppen varierar kraftigt
+    •	Merchant är bred (ICA, Coop, Amazon, Biltema…)
+    •	Fler kategorier delar samma beloppsnivå
+    •	Det finns risk för “falska kluster” */
+        // public decimal? MinAmount { get; set; }
+        // public decimal? MaxAmount { get; set; }
 
         // Om CH är baserad på återbetalning
+        // Att göra - skapa service för att upptäcka återbetalningar automatiskt
         public bool? IsRefund { get; set; }
 
         // Kategorin som transaktioner matchade mot denna regel tillhör
@@ -31,7 +52,8 @@ namespace PiggyzenMvp.API.Models
         public DateTime Created { get; set; } = DateTime.UtcNow;
 
         // Statistik (kan uppdateras efter varje matchning)
-        public int TimesUsed { get; set; } = 0;
+        [Column("TimesUsed")]
+        public int UsageCount { get; set; } = 0;
         public DateTime? LastUsedAt { get; set; }
 
         // Navigering till kopplingar (CategorizationUsage)
