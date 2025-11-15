@@ -180,6 +180,49 @@ public class TransactionsController : ControllerBase
         return Ok(new { categorized, errors });
     }
 
+    [HttpPost("change-category")]
+    public async Task<IActionResult> ChangeCategory(
+        [FromBody] IReadOnlyCollection<ChangeCategoryRequest>? requests,
+        CancellationToken ct
+    )
+    {
+        if (requests == null || requests.Count == 0)
+            return BadRequest(new { Message = "Minst en transaktion måste skickas in." });
+
+        var txIds = requests.Select(r => r.TransactionId).ToList();
+
+        // 🔍 Kör validering i service
+        var (ok, error, _) = await _categorizationService.ValidateSameSignAsync(txIds, ct);
+
+        if (!ok)
+            return BadRequest(new { Message = error });
+
+        var updated = 0;
+        var errors = new List<object>();
+
+        foreach (var req in requests)
+        {
+            var err = await _categorizationService.ChangeCategoryAsync(
+                req.TransactionId,
+                req.CategoryId,
+                ct
+            );
+
+            if (err != null)
+            {
+                errors.Add(new { req.TransactionId, Message = err });
+                continue;
+            }
+
+            updated++;
+        }
+
+        if (updated == 0)
+            return BadRequest(new { Message = "Inga transaktioner uppdaterades.", errors });
+
+        return Ok(new { updated, errors });
+    }
+
     [HttpPost("auto-categorize-missing")]
     public async Task<ActionResult<object>> AutoCategorizeMissing(
         [FromQuery] int take = 500,
