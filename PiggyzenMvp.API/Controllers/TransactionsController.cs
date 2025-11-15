@@ -180,6 +180,31 @@ public class TransactionsController : ControllerBase
         return Ok(new { categorized, errors });
     }
 
+    [HttpPost("auto-categorize")]
+    public async Task<IActionResult> AutoCategorize(
+        [FromBody] IReadOnlyCollection<AutoCategorizeRequest>? requests,
+        CancellationToken ct
+    )
+    {
+        if (requests == null || requests.Count == 0)
+            return BadRequest(new { Message = "Minst en transaktion måste skickas in." });
+
+        var transactionIds = requests.Select(r => r.TransactionId).ToList();
+        var results = await _categorizationService.AutoCategorizeAsync(transactionIds, ct);
+
+        var processed = results.Count;
+        var categorized = results.Count(r => r.Error == null);
+        var errors = results
+            .Where(r => r.Error != null)
+            .Select(r => new { r.TransactionId, Message = r.Error })
+            .ToList();
+
+        if (categorized == 0)
+            return BadRequest(new { Message = "Inga transaktioner auto-kategoriserades.", errors });
+
+        return Ok(new { processed, categorized, errors });
+    }
+
     [HttpPost("change-category")]
     public async Task<IActionResult> ChangeCategory(
         [FromBody] IReadOnlyCollection<ChangeCategoryRequest>? requests,
@@ -223,7 +248,8 @@ public class TransactionsController : ControllerBase
         return Ok(new { updated, errors });
     }
 
-    [HttpPost("auto-categorize-missing")]
+    //Inaktuell metod, kommenterad för referens
+    /* [HttpPost("auto-categorize-missing")]
     public async Task<ActionResult<object>> AutoCategorizeMissing(
         [FromQuery] int take = 500,
         CancellationToken ct = default
@@ -275,5 +301,5 @@ public class TransactionsController : ControllerBase
                 errors,
             }
         );
-    }
+    } */
 }
