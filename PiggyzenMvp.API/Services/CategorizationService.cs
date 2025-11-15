@@ -9,6 +9,13 @@ namespace PiggyzenMvp.API.Services
 
     public record ManualCategorizationResult(string? Error, int AutoCategorized);
 
+    public enum SignRule
+    {
+        MustBePositive,
+        MustBeNegative,
+        CanBeEither,
+    }
+
     public class CategorizationService
     {
         private readonly PiggyzenMvpContext _context;
@@ -42,12 +49,15 @@ namespace PiggyzenMvp.API.Services
             if (t.CategoryId != null)
                 return new ManualCategorizationResult("Transaction is already categorized.", 0);
 
-            var categoryExists = await _context.Categories.AnyAsync(
-                c => c.Id == categoryId,
-                cancellationToken: ct
-            );
-            if (!categoryExists)
+            var category = await _context
+                .Categories.Include(c => c.ParentCategory)
+                .FirstOrDefaultAsync(c => c.Id == categoryId, ct);
+            if (category == null)
                 return new ManualCategorizationResult("Category not found.", 0);
+
+            var signError = ValidateAmountSign(t.Amount, category, category.ParentCategory);
+            if (signError != null)
+                return new ManualCategorizationResult(signError, 0);
 
             var norm = t.NormalizedDescription;
             var isPos = t.Amount >= 0m;
@@ -131,12 +141,15 @@ namespace PiggyzenMvp.API.Services
             if (tx.CategoryId == newCategoryId)
                 return null;
 
-            var categoryExists = await _context.Categories.AnyAsync(
-                c => c.Id == newCategoryId,
-                cancellationToken: ct
-            );
-            if (!categoryExists)
+            var newCategory = await _context
+                .Categories.Include(c => c.ParentCategory)
+                .FirstOrDefaultAsync(c => c.Id == newCategoryId, ct);
+            if (newCategory == null)
                 return "Category not found.";
+
+            var signError = ValidateAmountSign(tx.Amount, newCategory, newCategory.ParentCategory);
+            if (signError != null)
+                return signError;
 
             var usage = tx.CategorizationUsage;
             if (usage == null)
@@ -467,6 +480,41 @@ namespace PiggyzenMvp.API.Services
                 return true;
 
             return false;
+        }
+
+        private static SignRule GetSignRuleForSystemCategory(string? systemName)
+        {
+            return systemName switch
+            {
+                "Income" => SignRule.MustBePositive,
+                "Variable Expenses" => SignRule.MustBeNegative,
+                "Fixed Expenses" => SignRule.MustBeNegative,
+                "Housing" => SignRule.MustBeNegative,
+                "Vehicle" => SignRule.MustBeNegative,
+                "Transfers" => SignRule.CanBeEither,
+                _ => SignRule.CanBeEither,
+            };
+        }
+
+        private static string? ValidateAmountSign(decimal amount, Category category, Category? parentCategory)
+        {
+            var systemCategory = category.IsSystemCategory ? category : parentCategory;
+            if (systemCategory == null)
+                return null;
+
+            var rule = GetSignRuleForSystemCategory(systemCategory.Name);
+            var isValid = rule switch
+            {
+                SignRule.MustBePositive => amount > 0,
+                SignRule.MustBeNegative => amount < 0,
+                SignRule.CanBeEither => true,
+                _ => true,
+            };
+
+            if (isValid)
+                return null;
+
+            return $"Beloppet {amount} är inte giltigt för systemkategorin '{systemCategory.Name}'.";
         }
 
         public async Task<(
