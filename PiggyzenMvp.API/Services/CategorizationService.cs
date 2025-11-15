@@ -194,6 +194,7 @@ namespace PiggyzenMvp.API.Services
             oldRule.LastUsedAt = latestRemainingUsage;
 
             await _context.SaveChangesAsync(ct);
+            await CleanupOrphanedRulesAsync(new[] { oldRule.Id }, ct);
             return null;
         }
 
@@ -263,6 +264,44 @@ namespace PiggyzenMvp.API.Services
 
             await _context.SaveChangesAsync(ct);
             return null;
+        }
+
+        public async Task CleanupOrphanedRulesAsync(
+            IReadOnlyCollection<int>? candidateRuleIds,
+            CancellationToken ct = default
+        )
+        {
+            if (candidateRuleIds == null || candidateRuleIds.Count == 0)
+                return;
+
+            var ruleIds = candidateRuleIds.Where(id => id > 0).Distinct().ToList();
+            if (ruleIds.Count == 0)
+                return;
+
+            var existingRules = await _context
+                .CategorizationRules.Where(r => ruleIds.Contains(r.Id))
+                .Select(r => r.Id)
+                .ToListAsync(ct);
+            if (existingRules.Count == 0)
+                return;
+
+            var referenced = await _context
+                .CategorizationUsages.Where(u => existingRules.Contains(u.CategorizationRuleId))
+                .Select(u => u.CategorizationRuleId)
+                .Distinct()
+                .ToListAsync(ct);
+
+            var referencedSet = referenced.ToHashSet();
+            var orphanIds = existingRules.Where(id => !referencedSet.Contains(id)).ToList();
+            if (orphanIds.Count == 0)
+                return;
+
+            var orphanRules = await _context
+                .CategorizationRules.Where(r => orphanIds.Contains(r.Id))
+                .ToListAsync(ct);
+
+            _context.CategorizationRules.RemoveRange(orphanRules);
+            await _context.SaveChangesAsync(ct);
         }
 
         // -------- Helpers --------

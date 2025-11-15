@@ -104,7 +104,7 @@ else
                     <input type="checkbox"
                            class="form-check-input"
                            @onchange="ToggleSelectAllFiltered"
-                           checked="@AreAllEligibleFilteredSelected" />
+                           checked="@AreAllFilteredSelected" />
                 </th>
                 <th>Datum</th>
                 <th>Beskrivning</th>
@@ -122,8 +122,6 @@ else
                         <input type="checkbox"
                                class="form-check-input"
                                checked="@IsSelected(tx.Id)"
-                               disabled="@(tx.CategoryId != null)"
-                               title="Endast transaktioner utan kategori kan markeras"
                                @onchange="e => ToggleSelection(tx.Id, e)" />
                     </td>
                     <td>@tx.TransactionDate.ToShortDateString()</td>
@@ -208,11 +206,11 @@ else
     private string GetSelectedBulkCategoryValue() =>
         bulkCategoryId?.ToString() ?? string.Empty;
 
-    private bool AreAllEligibleFilteredSelected
+    private bool AreAllFilteredSelected
     {
         get
         {
-            var filtered = FilteredTransactions.Where(t => t.CategoryId == null).ToList();
+            var filtered = FilteredTransactions;
             if (filtered.Count == 0)
                 return false;
 
@@ -237,7 +235,7 @@ else
 
     private void ToggleSelectAllFiltered(ChangeEventArgs e)
     {
-        var filtered = FilteredTransactions.Where(t => t.CategoryId == null).ToList();
+        var filtered = FilteredTransactions;
         var selectAll = e.Value is bool b && b;
 
         if (selectAll)
@@ -288,54 +286,112 @@ else
         try
         {
             var client = HttpClientFactory.CreateClient("ApiClient");
-            var requests = selectedTransactionIds
-                .Select(id => new CategorizeRequest(id, bulkCategoryId.Value))
+            var selected = transactions
+                .Where(t => selectedTransactionIds.Contains(t.Id))
                 .ToList();
 
-            var response = await client.PostAsJsonAsync(
-                "api/transactions/manual-categorize",
-                requests
-            );
+            var manualTargets = selected.Where(t => t.CategoryId == null).ToList();
+            var changeTargets = selected.Where(t => t.CategoryId != null).ToList();
 
-            if (!response.IsSuccessStatusCode)
+            ManualCategorizeResponse? manualResult = null;
+            ChangeCategoryResponse? changeResult = null;
+
+            if (manualTargets.Count > 0)
             {
-                var details = await response.Content.ReadAsStringAsync();
-                errorMessage = $"Kunde inte kategorisera valda transaktioner. ({(int)response.StatusCode}) {details}";
-                return;
+                var manualRequests = manualTargets
+                    .Select(t => new CategorizeRequest(t.Id, bulkCategoryId.Value))
+                    .ToList();
+
+                var manualResponse = await client.PostAsJsonAsync(
+                    "api/transactions/manual-categorize",
+                    manualRequests
+                );
+
+                if (!manualResponse.IsSuccessStatusCode)
+                {
+                    var details = await manualResponse.Content.ReadAsStringAsync();
+                    errorMessage =
+                        $"Kunde inte kategorisera valda transaktioner. ({(int)manualResponse.StatusCode}) {details}";
+                    return;
+                }
+
+                manualResult =
+                    await manualResponse.Content.ReadFromJsonAsync<ManualCategorizeResponse>()
+                    ?? new ManualCategorizeResponse();
+
+                var manualFailedIds = manualResult.Errors.Select(e => e.TransactionId).ToHashSet();
+
+                foreach (var tx in manualTargets)
+                {
+                    if (manualFailedIds.Contains(tx.Id))
+                        continue;
+
+                    tx.CategoryId = bulkCategoryId;
+                    UpdateCategoryFields(tx);
+                    selectedTransactionIds.Remove(tx.Id);
+                }
             }
 
-            var result =
-                await response.Content.ReadFromJsonAsync<ManualCategorizeResponse>()
-                ?? new ManualCategorizeResponse();
-
-            var failedIds = result.Errors.Select(e => e.TransactionId).ToHashSet();
-
-            foreach (var id in selectedTransactionIds.ToList())
+            if (changeTargets.Count > 0)
             {
-                if (failedIds.Contains(id))
-                    continue;
+                var changeRequests = changeTargets
+                    .Select(t => new ChangeCategoryRequest(t.Id, bulkCategoryId.Value))
+                    .ToList();
 
-                var tx = transactions.FirstOrDefault(t => t.Id == id);
-                if (tx is null)
-                    continue;
+                var changeResponse = await client.PostAsJsonAsync(
+                    "api/transactions/change-category",
+                    changeRequests
+                );
 
-                tx.CategoryId = bulkCategoryId;
-                UpdateCategoryFields(tx);
-                selectedTransactionIds.Remove(id);
+                if (!changeResponse.IsSuccessStatusCode)
+                {
+                    var details = await changeResponse.Content.ReadAsStringAsync();
+                    errorMessage =
+                        $"Kunde inte uppdatera kategoriserade transaktioner. ({(int)changeResponse.StatusCode}) {details}";
+                    return;
+                }
+
+                changeResult =
+                    await changeResponse.Content.ReadFromJsonAsync<ChangeCategoryResponse>()
+                    ?? new ChangeCategoryResponse();
+
+                var changeFailedIds = changeResult.Errors.Select(e => e.TransactionId).ToHashSet();
+
+                foreach (var tx in changeTargets)
+                {
+                    if (changeFailedIds.Contains(tx.Id))
+                        continue;
+
+                    tx.CategoryId = bulkCategoryId;
+                    UpdateCategoryFields(tx);
+                    selectedTransactionIds.Remove(tx.Id);
+                }
             }
 
-            successMessage =
-                result.Categorized > 0
-                    ? $"Kategoriserade {result.Categorized} transaktion(er)."
-                    : null;
+            var categorizedCount = manualResult?.Categorized ?? 0;
+            var updatedCount = changeResult?.Updated ?? 0;
 
-            if (result.Errors.Count > 0)
+            var successParts = new List<string>();
+            if (categorizedCount > 0)
+                successParts.Add($"Kategoriserade {categorizedCount} transaktion(er)");
+            if (updatedCount > 0)
+                successParts.Add($"Uppdaterade {updatedCount} transaktion(er)");
+
+            successMessage = successParts.Count > 0 ? string.Join(". ", successParts) + "." : null;
+
+            var combinedErrors = new List<ManualCategorizeError>();
+            if (manualResult != null)
+                combinedErrors.AddRange(manualResult.Errors);
+            if (changeResult != null)
+                combinedErrors.AddRange(changeResult.Errors);
+
+            if (combinedErrors.Count > 0)
             {
                 var errorList = string.Join(
                     ", ",
-                    result.Errors.Select(e => $"{e.TransactionId}: {e.Message}")
+                    combinedErrors.Select(e => $"{e.TransactionId}: {e.Message}")
                 );
-                errorMessage = $"Vissa transaktioner kunde inte kategoriseras: {errorList}";
+                errorMessage = $"Vissa transaktioner kunde inte hanteras: {errorList}";
             }
         }
         catch (Exception ex)
