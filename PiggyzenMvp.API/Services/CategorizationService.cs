@@ -6,6 +6,7 @@ using PiggyzenMvp.API.Models;
 namespace PiggyzenMvp.API.Services
 {
     public record AutoCategorizeResult(int TransactionId, string? Error);
+
     public record ManualCategorizationResult(string? Error, int AutoCategorized);
 
     public class CategorizationService
@@ -450,12 +451,15 @@ namespace PiggyzenMvp.API.Services
             if (description == description.ToUpper() && description.Trim().Contains(' '))
                 return true;
 
-            // Villkor 2: Innehåller ",XX"
-            if (description.Contains(",") && description.Length > 3)
+            // Villkor 2: Slutar på ",XX" där XX är två versaler (landskod)
+            if (
+                description.Length >= 3
+                && description[^3] == ','
+                && char.IsUpper(description[^2])
+                && char.IsUpper(description[^1])
+            )
             {
-                var parts = description.Split(',');
-                if (parts.Length > 1 && parts[1].Length == 2 && int.TryParse(parts[1], out _))
-                    return true;
+                return true;
             }
 
             // Villkor 3: Innehåller " AB"
