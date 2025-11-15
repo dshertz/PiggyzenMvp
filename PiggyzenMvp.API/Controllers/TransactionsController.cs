@@ -136,6 +136,19 @@ public class TransactionsController : ControllerBase
         return Ok(new ImportResult { Transactions = importedDtos, Errors = _importService.Errors });
     }
 
+    [HttpGet("{id}/similar-uncategorized")]
+    public async Task<ActionResult<List<SimilarTransactionDto>>> GetSimilarUncategorized(
+        int id,
+        CancellationToken ct
+    )
+    {
+        var similar = await _categorizationService.GetSimilarUncategorizedAsync(id, ct);
+        if (similar == null)
+            return NotFound(new { Message = "Transaction not found." });
+
+        return Ok(similar);
+    }
+
     // Kanske begränsa antal transaktioner som kan kategoriseras i en request?
     [HttpPost("manual-categorize")]
     public async Task<IActionResult> ManualCategorize(

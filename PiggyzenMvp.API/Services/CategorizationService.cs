@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PiggyzenMvp.API.Data;
+using PiggyzenMvp.API.DTOs.Transactions;
 using PiggyzenMvp.API.Models;
 
 namespace PiggyzenMvp.API.Services
@@ -266,6 +267,36 @@ namespace PiggyzenMvp.API.Services
 
             await _context.SaveChangesAsync(ct);
             return null;
+        }
+
+        public async Task<List<SimilarTransactionDto>?> GetSimilarUncategorizedAsync(
+            int transactionId,
+            CancellationToken ct = default
+        )
+        {
+            var tx = await _context
+                .Transactions.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == transactionId, ct);
+
+            if (tx == null)
+                return null;
+
+            var normalized = tx.NormalizedDescription;
+            var isPositive = tx.Amount >= 0m;
+
+            var similar = await _context
+                .Transactions.AsNoTracking()
+                .Where(t =>
+                    t.CategoryId == null
+                    && t.NormalizedDescription == normalized
+                    && (t.Amount >= 0m) == isPositive
+                    && t.Id != transactionId
+                )
+                .OrderByDescending(t => t.TransactionDate)
+                .Select(t => new SimilarTransactionDto(t.Id, t.TransactionDate, t.Description, t.Amount))
+                .ToListAsync(ct);
+
+            return similar;
         }
 
         public async Task<IReadOnlyCollection<AutoCategorizeResult>> AutoCategorizeAsync(
