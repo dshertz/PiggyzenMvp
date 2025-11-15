@@ -172,13 +172,10 @@ else
         {
             var client = HttpClientFactory.CreateClient("ApiClient");
 
-            var txTask = client.GetFromJsonAsync<List<TransactionDto>>("api/transactions");
-            var catTask = client.GetFromJsonAsync<List<CategoryDto>>("api/categories");
-
-            await Task.WhenAll(txTask!, catTask!);
-
-            transactions = txTask?.Result ?? new();
-            categories = catTask?.Result ?? new();
+            await Task.WhenAll(
+                LoadTransactionsAsync(client),
+                LoadCategoriesAsync(client)
+            );
         }
         catch (Exception ex)
         {
@@ -370,14 +367,24 @@ else
 
             var categorizedCount = manualResult?.Categorized ?? 0;
             var updatedCount = changeResult?.Updated ?? 0;
+            var autoCategorizedCount = manualResult?.AutoCategorized ?? 0;
 
             var successParts = new List<string>();
             if (categorizedCount > 0)
                 successParts.Add($"Kategoriserade {categorizedCount} transaktion(er)");
             if (updatedCount > 0)
                 successParts.Add($"Uppdaterade {updatedCount} transaktion(er)");
+            if (autoCategorizedCount > 0)
+                successParts.Add($"Auto-kategoriserade {autoCategorizedCount} liknande transaktion(er)");
 
             successMessage = successParts.Count > 0 ? string.Join(". ", successParts) + "." : null;
+
+            var anyChanges = categorizedCount > 0 || updatedCount > 0 || autoCategorizedCount > 0;
+            if (anyChanges)
+            {
+                await RefreshTransactionsAsync();
+                selectedTransactionIds.Clear();
+            }
 
             var combinedErrors = new List<ManualCategorizeError>();
             if (manualResult != null)
@@ -442,5 +449,31 @@ else
     private void SetFilterCategory(string category)
     {
         filterCategory = category;
+    }
+
+    private async Task LoadTransactionsAsync(HttpClient client)
+    {
+        var data = await client.GetFromJsonAsync<List<TransactionDto>>("api/transactions");
+        transactions = data ?? new();
+    }
+
+    private async Task LoadCategoriesAsync(HttpClient client)
+    {
+        var data = await client.GetFromJsonAsync<List<CategoryDto>>("api/categories");
+        categories = data ?? new();
+    }
+
+    private async Task RefreshTransactionsAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            await LoadTransactionsAsync(client);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Fel vid uppdatering: {ex.Message}");
+            errorMessage = "Kunde inte uppdatera transaktionerna efter kategorisering.";
+        }
     }
 }
