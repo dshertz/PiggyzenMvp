@@ -168,29 +168,31 @@ public class TransactionsController : ControllerBase
             return BadRequest(new { Message = error });
 
         var categorized = 0;
+        var autoCategorized = 0;
         var errors = new List<object>();
 
         foreach (var req in requests)
         {
-            var err = await _categorizationService.CategorizeManuallyAsync(
+            var result = await _categorizationService.CategorizeManuallyAsync(
                 req.TransactionId,
                 req.CategoryId,
                 ct
             );
 
-            if (err != null)
+            if (result.Error != null)
             {
-                errors.Add(new { req.TransactionId, Message = err });
+                errors.Add(new { req.TransactionId, Message = result.Error });
                 continue;
             }
 
             categorized++;
+            autoCategorized += result.AutoCategorized;
         }
 
         if (categorized == 0)
             return BadRequest(new { Message = "Inga transaktioner kategoriserades.", errors });
 
-        return Ok(new { categorized, errors });
+        return Ok(new { categorized, autoCategorized, errors });
     }
 
     [HttpPost("auto-categorize")]
@@ -203,7 +205,7 @@ public class TransactionsController : ControllerBase
             return BadRequest(new { Message = "Minst en transaktion måste skickas in." });
 
         var transactionIds = requests.Select(r => r.TransactionId).ToList();
-        var results = await _categorizationService.AutoCategorizeAsync(transactionIds, ct);
+        var results = await _categorizationService.AutoCategorizeBatchAsync(transactionIds, ct);
 
         var processed = results.Count;
         var categorized = results.Count(r => r.Error == null);
@@ -215,7 +217,14 @@ public class TransactionsController : ControllerBase
         if (categorized == 0)
             return BadRequest(new { Message = "Inga transaktioner auto-kategoriserades.", errors });
 
-        return Ok(new { processed, categorized, errors });
+        return Ok(
+            new
+            {
+                processed,
+                categorized,
+                errors,
+            }
+        );
     }
 
     [HttpPost("change-category")]
@@ -260,59 +269,4 @@ public class TransactionsController : ControllerBase
 
         return Ok(new { updated, errors });
     }
-
-    //Inaktuell metod, kommenterad för referens
-    /* [HttpPost("auto-categorize-missing")]
-    public async Task<ActionResult<object>> AutoCategorizeMissing(
-        [FromQuery] int take = 500,
-        CancellationToken ct = default
-    )
-    {
-        take = take <= 0 ? 500 : take;
-
-        var batch = await _context
-            .Transactions.Where(t => t.CategoryId == null)
-            .OrderBy(t => t.TransactionDate)
-            .Take(take)
-            .Select(t => new { t.Id, t.ImportId })
-            .ToListAsync(ct);
-
-        var processed = 0;
-        var categorized = 0;
-        var unchanged = 0;
-        var errors = new List<object>();
-
-        foreach (var item in batch)
-        {
-            processed++;
-            var err = await _categorizationService.CategorizeAutomaticallyAsync(item.ImportId, ct);
-            if (err == null)
-            {
-                var nowCat = await _context
-                    .Transactions.Where(t => t.Id == item.Id)
-                    .Select(t => t.CategoryId)
-                    .FirstAsync(ct);
-
-                if (nowCat.HasValue)
-                    categorized++;
-                else
-                    unchanged++;
-            }
-            else
-            {
-                unchanged++;
-                errors.Add(new { item.Id, Message = err });
-            }
-        }
-
-        return Ok(
-            new
-            {
-                processed,
-                categorized,
-                unchanged,
-                errors,
-            }
-        );
-    } */
 }

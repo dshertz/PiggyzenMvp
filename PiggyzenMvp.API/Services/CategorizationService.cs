@@ -6,6 +6,7 @@ using PiggyzenMvp.API.Models;
 namespace PiggyzenMvp.API.Services
 {
     public record AutoCategorizeResult(int TransactionId, string? Error);
+    public record ManualCategorizationResult(string? Error, int AutoCategorized);
 
     public class CategorizationService
     {
@@ -23,7 +24,7 @@ namespace PiggyzenMvp.API.Services
         /// - Skapar eller uppdaterar en historikrad kopplad till manuellt val.
         /// - Säkerställer att Transaktionen och dess Usage pekar på den manuella regeln.
         /// </summary>
-        public async Task<string?> CategorizeManuallyAsync(
+        public async Task<ManualCategorizationResult> CategorizeManuallyAsync(
             int transactionId,
             int categoryId,
             CancellationToken ct = default
@@ -35,17 +36,17 @@ namespace PiggyzenMvp.API.Services
                 .FirstOrDefaultAsync(x => x.Id == transactionId, ct);
 
             if (t == null)
-                return "Transaction not found.";
+                return new ManualCategorizationResult("Transaction not found.", 0);
 
             if (t.CategoryId != null)
-                return "Transaction is already categorized.";
+                return new ManualCategorizationResult("Transaction is already categorized.", 0);
 
             var categoryExists = await _context.Categories.AnyAsync(
                 c => c.Id == categoryId,
                 cancellationToken: ct
             );
             if (!categoryExists)
-                return "Category not found.";
+                return new ManualCategorizationResult("Category not found.", 0);
 
             var norm = t.NormalizedDescription;
             var isPos = t.Amount >= 0m;
@@ -81,7 +82,10 @@ namespace PiggyzenMvp.API.Services
             var nowTime = DateTime.UtcNow;
 
             if (t.CategorizationUsage != null)
-                return "Internal error: Usage exists but transaction is uncategorized.";
+                return new ManualCategorizationResult(
+                    "Internal error: Usage exists but transaction is uncategorized.",
+                    0
+                );
 
             var usage = new CategorizationUsage
             {
@@ -102,7 +106,8 @@ namespace PiggyzenMvp.API.Services
             history.LastUsedAt = nowTime;
 
             await _context.SaveChangesAsync(ct);
-            return null;
+            var autoCategorized = await AutoCategorizeSimilarTransactionsAsync(t, history, ct);
+            return new ManualCategorizationResult(null, autoCategorized);
         }
 
         public async Task<string?> ChangeCategoryAsync(
@@ -201,74 +206,6 @@ namespace PiggyzenMvp.API.Services
             return null;
         }
 
-        /// <summary>
-        /// Auto-kategoriserar en transaktion baserat på sparad historik/regler.
-        /// Matchningsordning:
-        ///  1) norm + tecken + beloppsintervall som inkluderar amount
-        ///  2) norm + tecken (utan intervall)
-        ///  3) norm (IsPositive=null i CH)
-        /// </summary>
-        public async Task<string?> CategorizeAutomaticallyAsync(
-            string importId,
-            CancellationToken ct = default
-        )
-        {
-            var t = await _context
-                .Transactions.Include(x => x.CategorizationUsage)
-                .ThenInclude(u => u.CategorizationRule)
-                .FirstOrDefaultAsync(x => x.ImportId == importId, ct);
-
-            if (t == null)
-                return $"Transaktion med ImportId \"{importId}\" hittades inte.";
-
-            var norm = _normalize.Normalize(t.Description);
-            var isPos = t.Amount >= 0m;
-
-            // Kandidater på norm
-            var candidates = await _context
-                .CategorizationRules.Where(h => h.NormalizedDescription == norm)
-                .ToListAsync(ct);
-
-            if (candidates.Count == 0)
-                return "Ingen historik matchar denna mottagare/beskrivning.";
-
-            // Rangordna kandidater
-            CategorizationRule? pick =
-                candidates.FirstOrDefault(h => MatchesSign(h, isPos))
-                ?? candidates.FirstOrDefault(h => h.IsPositive == null);
-
-            if (pick == null)
-                return "Ingen lämplig regel kunde väljas för auto-kategorisering.";
-
-            // 1:1 usage (skapa/uppdatera)
-            var u = t.CategorizationUsage;
-            if (u == null)
-            {
-                u = new CategorizationUsage
-                {
-                    TransactionId = t.Id,
-                    Amount = t.Amount,
-                    TransactionDate = t.TransactionDate,
-                    CategorizationRuleId = pick.Id,
-                    UsedAt = DateTime.UtcNow,
-                };
-                _context.CategorizationUsages.Add(u);
-            }
-            else if (u.CategorizationRuleId != pick.Id)
-            {
-                u.WasOverridden = DateTime.UtcNow;
-                u.CategorizationRuleId = pick.Id;
-                u.UsedAt = DateTime.UtcNow;
-                u.WasOverridden = null;
-            }
-
-            // Synka transaktionens kategori
-            t.CategoryId = pick.CategoryId;
-
-            await _context.SaveChangesAsync(ct);
-            return null;
-        }
-
         public async Task<List<SimilarTransactionDto>?> GetSimilarUncategorizedAsync(
             int transactionId,
             CancellationToken ct = default
@@ -293,13 +230,18 @@ namespace PiggyzenMvp.API.Services
                     && t.Id != transactionId
                 )
                 .OrderByDescending(t => t.TransactionDate)
-                .Select(t => new SimilarTransactionDto(t.Id, t.TransactionDate, t.Description, t.Amount))
+                .Select(t => new SimilarTransactionDto(
+                    t.Id,
+                    t.TransactionDate,
+                    t.Description,
+                    t.Amount
+                ))
                 .ToListAsync(ct);
 
             return similar;
         }
 
-        public async Task<IReadOnlyCollection<AutoCategorizeResult>> AutoCategorizeAsync(
+        public async Task<IReadOnlyCollection<AutoCategorizeResult>> AutoCategorizeBatchAsync(
             IReadOnlyCollection<int> transactionIds,
             CancellationToken ct = default
         )
@@ -312,14 +254,14 @@ namespace PiggyzenMvp.API.Services
 
             foreach (var id in distinctIds)
             {
-                var error = await AutoCategorizeTransactionAsync(id, ct);
+                var error = await AutoCategorizeSingleAsync(id, ct);
                 results.Add(new AutoCategorizeResult(id, error));
             }
 
             return results;
         }
 
-        private async Task<string?> AutoCategorizeTransactionAsync(
+        private async Task<string?> AutoCategorizeSingleAsync(
             int transactionId,
             CancellationToken ct
         )
@@ -393,6 +335,64 @@ namespace PiggyzenMvp.API.Services
 
             await _context.SaveChangesAsync(ct);
             return null;
+        }
+
+        private async Task<int> AutoCategorizeSimilarTransactionsAsync(
+            Transaction referenceTransaction,
+            CategorizationRule rule,
+            CancellationToken ct
+        )
+        {
+            if (!rule.IsDescriptionAutoGenerated)
+                return 0;
+
+            var normalized = referenceTransaction.NormalizedDescription;
+            var isPositive = referenceTransaction.Amount >= 0m;
+
+            var similarTransactions = await _context
+                .Transactions.Include(t => t.CategorizationUsage)
+                .Where(t =>
+                    t.CategoryId == null
+                    && t.NormalizedDescription == normalized
+                    && (t.Amount >= 0m) == isPositive
+                    && t.Id != referenceTransaction.Id
+                )
+                .ToListAsync(ct);
+
+            if (similarTransactions.Count == 0)
+                return 0;
+
+            var autoCategorized = 0;
+            var now = DateTime.UtcNow;
+
+            foreach (var tx in similarTransactions)
+            {
+                if (tx.CategorizationUsage != null)
+                    continue;
+
+                var usage = new CategorizationUsage
+                {
+                    TransactionId = tx.Id,
+                    Amount = tx.Amount,
+                    TransactionDate = tx.TransactionDate,
+                    CategorizationRule = rule,
+                    UsedAt = now,
+                    Source = CategorizationSource.Auto,
+                };
+
+                _context.CategorizationUsages.Add(usage);
+                tx.CategoryId = rule.CategoryId;
+                autoCategorized++;
+            }
+
+            if (autoCategorized == 0)
+                return 0;
+
+            rule.UsageCount += autoCategorized;
+            rule.LastUsedAt = now;
+
+            await _context.SaveChangesAsync(ct);
+            return autoCategorized;
         }
 
         public async Task CleanupOrphanedRulesAsync(
