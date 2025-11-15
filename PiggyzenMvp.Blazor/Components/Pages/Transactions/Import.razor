@@ -27,6 +27,26 @@
     </div>
 }
 
+@if (autoCategorizedCount > 0)
+{
+    <div class="alert alert-success mt-4">
+        <strong>✅ Auto-kategoriserade:</strong> @autoCategorizedCount transaktion(er).
+    </div>
+}
+
+@if (autoCategorizeErrors?.Any() == true)
+{
+    <div class="alert alert-info mt-4">
+        <strong>ℹ️ Kunde inte auto-kategorisera:</strong>
+        <ul>
+            @foreach (var item in autoCategorizeErrors)
+            {
+                <li>Tx #@item.TransactionId – @item.Message</li>
+            }
+        </ul>
+    </div>
+}
+
 @if (parsedTransactions?.Any() == true)
 {
     <h2 class="mt-4">Importerade transaktioner</h2>
@@ -67,6 +87,8 @@
     private TransactionImportRequest importRequest = new();
     private List<TransactionImportDto>? parsedTransactions;
     private List<string>? importErrors;
+    private int autoCategorizedCount;
+    private List<AutoCategorizeError>? autoCategorizeErrors;
     private string? errorMessage;
 
     private async Task ImportTransactions()
@@ -74,6 +96,8 @@
         errorMessage = null;
         parsedTransactions = null;
         importErrors = null;
+        autoCategorizedCount = 0;
+        autoCategorizeErrors = null;
 
         if (string.IsNullOrWhiteSpace(importRequest.RawText))
         {
@@ -93,6 +117,8 @@
                 var result = await response.Content.ReadFromJsonAsync<ImportResult>();
                 parsedTransactions = result?.Transactions ?? new();
                 importErrors = result?.Errors ?? new();
+                autoCategorizedCount = result?.AutoCategorized ?? 0;
+                autoCategorizeErrors = result?.AutoCategorizeErrors ?? new();
             }
             else
             {
@@ -131,6 +157,14 @@
     {
         public List<TransactionImportDto> Transactions { get; set; } = new();
         public List<string> Errors { get; set; } = new();
+        public int AutoCategorized { get; set; }
+        public List<AutoCategorizeError> AutoCategorizeErrors { get; set; } = new();
+    }
+
+    public class AutoCategorizeError
+    {
+        public int TransactionId { get; set; }
+        public string? Message { get; set; }
     }
 }
 @* @page "/import"

@@ -115,10 +115,18 @@ public class TransactionsController : ControllerBase
             })
             .ToList();
 
+        List<AutoCategorizeResult>? autoResults = null;
+
         if (newTransactions.Any())
         {
             await _context.Transactions.AddRangeAsync(newTransactions);
             await _context.SaveChangesAsync();
+
+            var newIds = newTransactions.Select(t => t.Id).ToList();
+            var autoCategorizeResults = await _categorizationService.AutoCategorizeBatchAsync(
+                newIds
+            );
+            autoResults = autoCategorizeResults.ToList();
         }
 
         var importedDtos = newTransactions
@@ -133,7 +141,26 @@ public class TransactionsController : ControllerBase
             })
             .ToList();
 
-        return Ok(new ImportResult { Transactions = importedDtos, Errors = _importService.Errors });
+        var autoCategorizedCount = autoResults?.Count(r => r.Error == null) ?? 0;
+        var autoCategorizeErrors =
+            autoResults
+                ?.Where(r => r.Error != null)
+                .Select(r => new AutoCategorizeErrorDto
+                {
+                    TransactionId = r.TransactionId,
+                    Message = r.Error ?? string.Empty,
+                })
+                .ToList() ?? new List<AutoCategorizeErrorDto>();
+
+        return Ok(
+            new ImportResult
+            {
+                Transactions = importedDtos,
+                Errors = _importService.Errors,
+                AutoCategorized = autoCategorizedCount,
+                AutoCategorizeErrors = autoCategorizeErrors,
+            }
+        );
     }
 
     [HttpGet("{id}/similar-uncategorized")]
