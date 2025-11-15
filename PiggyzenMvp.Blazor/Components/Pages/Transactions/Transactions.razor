@@ -4,6 +4,7 @@
 @using PiggyzenMvp.Blazor.DTOs
 @using PiggyzenMvp.Blazor.DTOs.Transactions
 @inject IHttpClientFactory HttpClientFactory
+@inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedLocalStorage BrowserStorage
 
 <h2>Transaktioner</h2>
 
@@ -11,11 +12,12 @@
     <div>
         <label for="search" class="form-label mb-1">Sök</label>
         <div class="input-group">
-            <input id="search"
-                   class="form-control"
-                   @bind="searchText"
-                   @bind:event="oninput"
-                   placeholder="Sök beskrivning..." />
+            <InputText id="search"
+                       class="form-control"
+                       @bind-Value="searchText"
+                       oninput="this.dispatchEvent(new Event('change'))"
+                       @onchange="OnSearchChanged"
+                       placeholder="Sök beskrivning..." />
             <span class="input-group-text bg-white">
                 <i class="bi bi-search"></i>
             </span>
@@ -25,17 +27,17 @@
         <label class="form-label mb-1">Filtrera</label>
         <div class="btn-group" role="group" aria-label="Filter">
             <button type="button"
-                    class="btn btn-outline-primary @(filterCategory == "all" ? "active" : "")"
+                    class="btn btn-outline-primary @(filterStateLoaded && filterCategory == "all" ? "active" : "")"
                     @onclick='() => SetFilterCategory("all")'>
                 Alla
             </button>
             <button type="button"
-                    class="btn btn-outline-success @(filterCategory == "categorized" ? "active" : "")"
+                    class="btn btn-outline-success @(filterStateLoaded && filterCategory == "categorized" ? "active" : "")"
                     @onclick='() => SetFilterCategory("categorized")'>
                 Kategoriserade
             </button>
             <button type="button"
-                    class="btn btn-outline-warning @(filterCategory == "uncategorized" ? "active" : "")"
+                    class="btn btn-outline-warning @(filterStateLoaded && filterCategory == "uncategorized" ? "active" : "")"
                     @onclick='() => SetFilterCategory("uncategorized")'>
                 Ej kategoriserade
             </button>
@@ -147,16 +149,18 @@ else
 
     // Filter state
     private string searchText = "";
-    private string filterCategory = "all";
+    private string? filterCategory = null;
+    private const string FilterStateKey = "transactions_filter_state";
+    private bool filterStateLoaded;
 
     // Filtrerad lista
     private List<TransactionDto> FilteredTransactions =>
         transactions?
             .Where(tx =>
                 (string.IsNullOrWhiteSpace(searchText) || tx.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
-                (filterCategory == "all" ||
-                 (filterCategory == "categorized" && tx.CategoryId != null) ||
-                 (filterCategory == "uncategorized" && tx.CategoryId == null))
+                ((filterCategory ?? "all") == "all" ||
+                 ((filterCategory ?? "all") == "categorized" && tx.CategoryId != null) ||
+                 ((filterCategory ?? "all") == "uncategorized" && tx.CategoryId == null))
             )
             .OrderByDescending(t => t.TransactionDate)
             .ToList()
@@ -170,6 +174,8 @@ else
     {
         try
         {
+            await LoadFilterStateAsync();
+
             var client = HttpClientFactory.CreateClient("ApiClient");
 
             await Task.WhenAll(
@@ -183,6 +189,10 @@ else
             transactions = new();
             categories = new();
             errorMessage = "Kunde inte läsa in data.";
+        }
+        finally
+        {
+            filterStateLoaded = true;
         }
     }
 
@@ -452,6 +462,43 @@ else
     private void SetFilterCategory(string category)
     {
         filterCategory = category;
+        _ = SaveFilterStateAsync();
+    }
+
+    private async Task OnSearchChanged(ChangeEventArgs e)
+    {
+        searchText = e.Value?.ToString() ?? "";
+        await SaveFilterStateAsync();
+    }
+
+    private async Task LoadFilterStateAsync()
+    {
+        try
+        {
+            var result = await BrowserStorage.GetAsync<FilterState>(FilterStateKey);
+            if (result.Success && result.Value is FilterState state)
+            {
+                filterCategory = state.FilterCategory ?? "all";
+                searchText = state.SearchText ?? "";
+            }
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
+
+    private async Task SaveFilterStateAsync()
+    {
+        var state = new FilterState { SearchText = searchText, FilterCategory = filterCategory };
+        try
+        {
+            await BrowserStorage.SetAsync(FilterStateKey, state);
+        }
+        catch
+        {
+            // ignore storage errors
+        }
     }
 
     private async Task LoadTransactionsAsync(HttpClient client)
@@ -478,5 +525,11 @@ else
             Console.Error.WriteLine($"Fel vid uppdatering: {ex.Message}");
             errorMessage = "Kunde inte uppdatera transaktionerna efter kategorisering.";
         }
+    }
+
+    private class FilterState
+    {
+        public string? SearchText { get; set; }
+        public string? FilterCategory { get; set; }
     }
 }
