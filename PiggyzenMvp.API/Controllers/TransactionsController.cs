@@ -136,50 +136,6 @@ public class TransactionsController : ControllerBase
         return Ok(new ImportResult { Transactions = importedDtos, Errors = _importService.Errors });
     }
 
-    //Kategorisering av en transaktion
-    /*  [HttpPut("{id:int}/category")]
-     public async Task<IActionResult> SetCategory(int id, [FromBody] SetCategoryRequest req)
-     {
-         var transaction = await _context.Transactions.FindAsync(id);
-         if (transaction == null)
-             return NotFound(new { Message = "Transaction not found." });
- 
-         var category = await _context.Categories.FindAsync(req.CategoryId);
-         if (category == null)
-             return NotFound(new { Message = "Category not found." });
- 
-         transaction.CategoryId = req.CategoryId;
-         await _context.SaveChangesAsync();
- 
-         return NoContent();
-     } */
-
-    //Utbytt mot endpoint som tar emot lista
-    /* [HttpPost("{id:int}/categorize")]
-    public async Task<IActionResult> CategorizeById(
-        int id,
-        [FromBody] CategorizeRequest req,
-        CancellationToken ct
-    )
-    {
-        var tx = await _context.Transactions.FindAsync(new object[] { id }, ct);
-        if (tx == null)
-            return NotFound(new { Message = $"Transaction {id} not found." });
-
-        var catExists = await _context.Categories.AnyAsync(c => c.Id == req.CategoryId, ct);
-        if (!catExists)
-            return NotFound(new { Message = $"Category {req.CategoryId} not found." });
-
-        var err = await _categorizationService.CategorizeManuallyAsync(
-            tx.ImportId,
-            req.CategoryId,
-            ct
-        );
-        if (err != null)
-            return BadRequest(new { Message = err });
-
-        return NoContent();
-    } */
     // Kanske begränsa antal transaktioner som kan kategoriseras i en request?
     [HttpPost("manual-categorize")]
     public async Task<IActionResult> ManualCategorize(
@@ -189,6 +145,14 @@ public class TransactionsController : ControllerBase
     {
         if (requests == null || requests.Count == 0)
             return BadRequest(new { Message = "Minst en transaktion måste skickas in." });
+
+        var txIds = requests.Select(r => r.TransactionId).ToList();
+
+        // 🔍 Kör validering i service
+        var (ok, error, _) = await _categorizationService.ValidateSameSignAsync(txIds, ct);
+
+        if (!ok)
+            return BadRequest(new { Message = error });
 
         var categorized = 0;
         var errors = new List<object>();

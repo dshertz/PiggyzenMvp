@@ -48,8 +48,8 @@ namespace PiggyzenMvp.API.Services
             var isPos = t.Amount >= 0m;
 
             var candidateRules = await _context
-                .CategorizationRules.Where(
-                    r => r.NormalizedDescription == norm && r.CategoryId == categoryId
+                .CategorizationRules.Where(r =>
+                    r.NormalizedDescription == norm && r.CategoryId == categoryId
                 )
                 .ToListAsync(ct);
 
@@ -200,6 +200,35 @@ namespace PiggyzenMvp.API.Services
                 return true;
 
             return false;
+        }
+
+        public async Task<(
+            bool Ok,
+            string? Error,
+            List<Transaction> Transactions
+        )> ValidateSameSignAsync(IReadOnlyCollection<int> txIds, CancellationToken ct)
+        {
+            if (txIds.Count == 0)
+                return (false, "No transaction IDs provided.", new List<Transaction>());
+
+            var transactions = await _context
+                .Transactions.Where(t => txIds.Contains(t.Id))
+                .ToListAsync(ct);
+
+            if (transactions.Count != txIds.Count)
+                return (false, "One or more transactions not found.", transactions);
+
+            var allPositive = transactions.All(t => t.Amount >= 0);
+            var allNegative = transactions.All(t => t.Amount < 0);
+
+            if (!(allPositive || allNegative))
+                return (
+                    false,
+                    "Alla transaktioner måste ha samma tecken (positiva eller negativa).",
+                    transactions
+                );
+
+            return (true, null, transactions);
         }
     }
 }
