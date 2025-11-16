@@ -3,8 +3,10 @@
 @using System.Linq
 @using PiggyzenMvp.Blazor.DTOs
 @using PiggyzenMvp.Blazor.DTOs.Transactions
+@using PiggyzenMvp.Blazor.Services
 @inject IHttpClientFactory HttpClientFactory
 @inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedLocalStorage BrowserStorage
+@inject TransactionFilterState FilterState
 
 <h2>Transaktioner</h2>
 
@@ -473,13 +475,21 @@ else
 
     private async Task LoadFilterStateAsync()
     {
+        // 1) Läs från in-memory state (Blazor circuit). Ingen async/lagg.
+        filterCategory = FilterState.FilterCategory;
+        searchText = FilterState.SearchText;
+
+        // 2) Hämta ev. persisted state (för browser refresh). Uppdatera både lokal state och container.
         try
         {
-            var result = await BrowserStorage.GetAsync<FilterState>(FilterStateKey);
-            if (result.Success && result.Value is FilterState state)
+            var result = await BrowserStorage.GetAsync<FilterStatePayload>(FilterStateKey);
+            if (result.Success && result.Value is FilterStatePayload state)
             {
-                filterCategory = state.FilterCategory ?? "all";
-                searchText = state.SearchText ?? "";
+                filterCategory = state.FilterCategory ?? filterCategory ?? "all";
+                searchText = state.SearchText ?? searchText ?? string.Empty;
+                FilterState.FilterCategory = filterCategory ?? "all";
+                FilterState.SearchText = searchText ?? string.Empty;
+                FilterState.IsLoadedFromStorage = true;
             }
         }
         catch
@@ -490,7 +500,14 @@ else
 
     private async Task SaveFilterStateAsync()
     {
-        var state = new FilterState { SearchText = searchText, FilterCategory = filterCategory };
+        FilterState.FilterCategory = filterCategory ?? "all";
+        FilterState.SearchText = searchText ?? string.Empty;
+
+        var state = new FilterStatePayload
+        {
+            SearchText = FilterState.SearchText,
+            FilterCategory = FilterState.FilterCategory,
+        };
         try
         {
             await BrowserStorage.SetAsync(FilterStateKey, state);
@@ -527,7 +544,7 @@ else
         }
     }
 
-    private class FilterState
+    private class FilterStatePayload
     {
         public string? SearchText { get; set; }
         public string? FilterCategory { get; set; }
