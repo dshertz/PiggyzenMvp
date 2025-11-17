@@ -35,6 +35,7 @@ builder.Services.AddHttpClient(
         );
     }
 );
+builder.Services.AddScoped<PiggyzenMvp.Blazor.Services.TransactionFilterState>();
 
 var app = builder.Build();
 

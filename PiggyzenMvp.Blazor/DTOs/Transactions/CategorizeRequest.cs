@@ -1,3 +1,3 @@
-namespace PiggyzenMvp.API.DTOs.Transactions;
+namespace PiggyzenMvp.Blazor.DTOs.Transactions;
 
 public record CategorizeRequest(int TransactionId, int CategoryId);

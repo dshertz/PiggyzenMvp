@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PiggyzenMvp.API.Data;
 
@@ -10,14 +11,16 @@ using PiggyzenMvp.API.Data;
 namespace PiggyzenMvp.API.Data.Migrations
 {
     [DbContext(typeof(PiggyzenMvpContext))]
-    partial class PiggyzenMvpContextModelSnapshot : ModelSnapshot
+    [Migration("20251113125555_SimplifiedCategorizationHistory")]
+    partial class SimplifiedCategorizationHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.7");
 
-            modelBuilder.Entity("PiggyzenMvp.API.Models.CategorizationRule", b =>
+            modelBuilder.Entity("PiggyzenMvp.API.Models.CategorizationHistory", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -46,14 +49,19 @@ namespace PiggyzenMvp.API.Data.Migrations
                     b.Property<DateTime?>("LastUsedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("MaxAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("NormalizedDescription")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("UsageCount")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("TimesUsed");
+                    b.Property<int>("TimesUsed")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -63,7 +71,7 @@ namespace PiggyzenMvp.API.Data.Migrations
 
                     b.HasIndex("NormalizedDescription", "IsPositive");
 
-                    b.ToTable("CategorizationRules");
+                    b.ToTable("CategorizationHistories");
                 });
 
             modelBuilder.Entity("PiggyzenMvp.API.Models.CategorizationUsage", b =>
@@ -75,10 +83,7 @@ namespace PiggyzenMvp.API.Data.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("CategorizationRuleId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("Source")
+                    b.Property<int>("CategorizationHistoryId")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("TransactionDate")
@@ -95,7 +100,7 @@ namespace PiggyzenMvp.API.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CategorizationRuleId");
+                    b.HasIndex("CategorizationHistoryId");
 
                     b.HasIndex("TransactionId")
                         .IsUnique();
@@ -204,7 +209,7 @@ namespace PiggyzenMvp.API.Data.Migrations
                     b.ToTable("Transactions");
                 });
 
-            modelBuilder.Entity("PiggyzenMvp.API.Models.CategorizationRule", b =>
+            modelBuilder.Entity("PiggyzenMvp.API.Models.CategorizationHistory", b =>
                 {
                     b.HasOne("PiggyzenMvp.API.Models.Category", "Category")
                         .WithMany()
@@ -217,9 +222,9 @@ namespace PiggyzenMvp.API.Data.Migrations
 
             modelBuilder.Entity("PiggyzenMvp.API.Models.CategorizationUsage", b =>
                 {
-                    b.HasOne("PiggyzenMvp.API.Models.CategorizationRule", "CategorizationRule")
+                    b.HasOne("PiggyzenMvp.API.Models.CategorizationHistory", "CategorizationHistory")
                         .WithMany("Usages")
-                        .HasForeignKey("CategorizationRuleId")
+                        .HasForeignKey("CategorizationHistoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -229,7 +234,7 @@ namespace PiggyzenMvp.API.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("CategorizationRule");
+                    b.Navigation("CategorizationHistory");
 
                     b.Navigation("Transaction");
                 });
@@ -253,7 +258,7 @@ namespace PiggyzenMvp.API.Data.Migrations
                     b.Navigation("Category");
                 });
 
-            modelBuilder.Entity("PiggyzenMvp.API.Models.CategorizationRule", b =>
+            modelBuilder.Entity("PiggyzenMvp.API.Models.CategorizationHistory", b =>
                 {
                     b.Navigation("Usages");
                 });

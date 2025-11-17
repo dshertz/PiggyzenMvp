@@ -115,10 +115,18 @@ public class TransactionsController : ControllerBase
             })
             .ToList();
 
+        List<AutoCategorizeResult>? autoResults = null;
+
         if (newTransactions.Any())
         {
             await _context.Transactions.AddRangeAsync(newTransactions);
             await _context.SaveChangesAsync();
+
+            var newIds = newTransactions.Select(t => t.Id).ToList();
+            var autoCategorizeResults = await _categorizationService.AutoCategorizeBatchAsync(
+                newIds
+            );
+            autoResults = autoCategorizeResults.ToList();
         }
 
         var importedDtos = newTransactions
@@ -133,99 +141,159 @@ public class TransactionsController : ControllerBase
             })
             .ToList();
 
-        return Ok(new ImportResult { Transactions = importedDtos, Errors = _importService.Errors });
+        var autoCategorizedCount = autoResults?.Count(r => r.Error == null) ?? 0;
+        var autoCategorizeErrors =
+            autoResults
+                ?.Where(r => r.Error != null)
+                .Select(r => new AutoCategorizeErrorDto
+                {
+                    TransactionId = r.TransactionId,
+                    Message = r.Error ?? string.Empty,
+                })
+                .ToList() ?? new List<AutoCategorizeErrorDto>();
+
+        return Ok(
+            new ImportResult
+            {
+                Transactions = importedDtos,
+                Errors = _importService.Errors,
+                AutoCategorized = autoCategorizedCount,
+                AutoCategorizeErrors = autoCategorizeErrors,
+            }
+        );
     }
 
-    [HttpPut("{id:int}/category")]
-    public async Task<IActionResult> SetCategory(int id, [FromBody] SetCategoryRequest req)
-    {
-        var transaction = await _context.Transactions.FindAsync(id);
-        if (transaction == null)
-            return NotFound(new { Message = "Transaction not found." });
-
-        var category = await _context.Categories.FindAsync(req.CategoryId);
-        if (category == null)
-            return NotFound(new { Message = "Category not found." });
-
-        transaction.CategoryId = req.CategoryId;
-        await _context.SaveChangesAsync();
-
-        return NoContent();
-    }
-
-    [HttpPost("{id:int}/categorize")]
-    public async Task<IActionResult> CategorizeById(
+    [HttpGet("{id}/similar-uncategorized")]
+    public async Task<ActionResult<List<SimilarTransactionDto>>> GetSimilarUncategorized(
         int id,
-        [FromBody] CategorizeRequest req,
         CancellationToken ct
     )
     {
-        var tx = await _context.Transactions.FindAsync(new object[] { id }, ct);
-        if (tx == null)
-            return NotFound(new { Message = $"Transaction {id} not found." });
+        var similar = await _categorizationService.GetSimilarUncategorizedAsync(id, ct);
+        if (similar == null)
+            return NotFound(new { Message = "Transaction not found." });
 
-        var catExists = await _context.Categories.AnyAsync(c => c.Id == req.CategoryId, ct);
-        if (!catExists)
-            return NotFound(new { Message = $"Category {req.CategoryId} not found." });
-
-        var err = await _categorizationService.CategorizeAsync(tx.ImportId, req.CategoryId, ct);
-        if (err != null)
-            return BadRequest(new { Message = err });
-
-        return NoContent();
+        return Ok(similar);
     }
 
-    [HttpPost("auto-categorize-missing")]
-    public async Task<ActionResult<object>> AutoCategorizeMissing(
-        [FromQuery] int take = 500,
-        CancellationToken ct = default
+    // Kanske begränsa antal transaktioner som kan kategoriseras i en request?
+    [HttpPost("manual-categorize")]
+    public async Task<IActionResult> ManualCategorize(
+        [FromBody] IReadOnlyCollection<CategorizeRequest>? requests,
+        CancellationToken ct
     )
     {
-        take = take <= 0 ? 500 : take;
+        if (requests == null || requests.Count == 0)
+            return BadRequest(new { Message = "Minst en transaktion måste skickas in." });
 
-        var batch = await _context
-            .Transactions.Where(t => t.CategoryId == null)
-            .OrderBy(t => t.TransactionDate)
-            .Take(take)
-            .Select(t => new { t.Id, t.ImportId })
-            .ToListAsync(ct);
+        var txIds = requests.Select(r => r.TransactionId).ToList();
 
-        var processed = 0;
+        // 🔍 Kör validering i service
+        var (ok, error, _) = await _categorizationService.ValidateSameSignAsync(txIds, ct);
+
+        if (!ok)
+            return BadRequest(new { Message = error });
+
         var categorized = 0;
-        var unchanged = 0;
+        var autoCategorized = 0;
         var errors = new List<object>();
 
-        foreach (var item in batch)
+        foreach (var req in requests)
         {
-            processed++;
-            var err = await _categorizationService.AutoCategorizeAsync(item.ImportId, ct);
-            if (err == null)
-            {
-                var nowCat = await _context
-                    .Transactions.Where(t => t.Id == item.Id)
-                    .Select(t => t.CategoryId)
-                    .FirstAsync(ct);
+            var result = await _categorizationService.CategorizeManuallyAsync(
+                req.TransactionId,
+                req.CategoryId,
+                ct
+            );
 
-                if (nowCat.HasValue)
-                    categorized++;
-                else
-                    unchanged++;
-            }
-            else
+            if (result.Error != null)
             {
-                unchanged++;
-                errors.Add(new { item.Id, Message = err });
+                errors.Add(new { req.TransactionId, Message = result.Error });
+                continue;
             }
+
+            categorized++;
+            autoCategorized += result.AutoCategorized;
         }
+
+        if (categorized == 0)
+            return BadRequest(new { Message = "Inga transaktioner kategoriserades.", errors });
+
+        return Ok(new { categorized, autoCategorized, errors });
+    }
+
+    [HttpPost("auto-categorize")]
+    public async Task<IActionResult> AutoCategorize(
+        [FromBody] IReadOnlyCollection<AutoCategorizeRequest>? requests,
+        CancellationToken ct
+    )
+    {
+        if (requests == null || requests.Count == 0)
+            return BadRequest(new { Message = "Minst en transaktion måste skickas in." });
+
+        var transactionIds = requests.Select(r => r.TransactionId).ToList();
+        var results = await _categorizationService.AutoCategorizeBatchAsync(transactionIds, ct);
+
+        var processed = results.Count;
+        var categorized = results.Count(r => r.Error == null);
+        var errors = results
+            .Where(r => r.Error != null)
+            .Select(r => new { r.TransactionId, Message = r.Error })
+            .ToList();
+
+        if (categorized == 0)
+            return BadRequest(new { Message = "Inga transaktioner auto-kategoriserades.", errors });
 
         return Ok(
             new
             {
                 processed,
                 categorized,
-                unchanged,
                 errors,
             }
         );
+    }
+
+    [HttpPost("change-category")]
+    public async Task<IActionResult> ChangeCategory(
+        [FromBody] IReadOnlyCollection<ChangeCategoryRequest>? requests,
+        CancellationToken ct
+    )
+    {
+        if (requests == null || requests.Count == 0)
+            return BadRequest(new { Message = "Minst en transaktion måste skickas in." });
+
+        var txIds = requests.Select(r => r.TransactionId).ToList();
+
+        // 🔍 Kör validering i service
+        var (ok, error, _) = await _categorizationService.ValidateSameSignAsync(txIds, ct);
+
+        if (!ok)
+            return BadRequest(new { Message = error });
+
+        var updated = 0;
+        var errors = new List<object>();
+
+        foreach (var req in requests)
+        {
+            var err = await _categorizationService.ChangeCategoryAsync(
+                req.TransactionId,
+                req.CategoryId,
+                ct
+            );
+
+            if (err != null)
+            {
+                errors.Add(new { req.TransactionId, Message = err });
+                continue;
+            }
+
+            updated++;
+        }
+
+        if (updated == 0)
+            return BadRequest(new { Message = "Inga transaktioner uppdaterades.", errors });
+
+        return Ok(new { updated, errors });
     }
 }

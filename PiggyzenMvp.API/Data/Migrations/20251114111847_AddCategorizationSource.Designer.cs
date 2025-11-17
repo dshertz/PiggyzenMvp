@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PiggyzenMvp.API.Data;
 
@@ -10,9 +11,11 @@ using PiggyzenMvp.API.Data;
 namespace PiggyzenMvp.API.Data.Migrations
 {
     [DbContext(typeof(PiggyzenMvpContext))]
-    partial class PiggyzenMvpContextModelSnapshot : ModelSnapshot
+    [Migration("20251114111847_AddCategorizationSource")]
+    partial class AddCategorizationSource
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.7");
@@ -46,14 +49,19 @@ namespace PiggyzenMvp.API.Data.Migrations
                     b.Property<DateTime?>("LastUsedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("MaxAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("NormalizedDescription")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("UsageCount")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("TimesUsed");
+                    b.Property<int>("TimesUsed")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

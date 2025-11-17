@@ -4,4 +4,6 @@ public class ImportResult
 {
     public List<TransactionDto> Transactions { get; set; } = new();
     public List<string> Errors { get; set; } = new();
+    public int AutoCategorized { get; set; }
+    public List<AutoCategorizeErrorDto> AutoCategorizeErrors { get; set; } = new();
 }

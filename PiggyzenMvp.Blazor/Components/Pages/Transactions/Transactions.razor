@@ -1,7 +1,12 @@
 @page "/transactions"
 @rendermode InteractiveServer
 @using System.Linq
+@using PiggyzenMvp.Blazor.DTOs
+@using PiggyzenMvp.Blazor.DTOs.Transactions
+@using PiggyzenMvp.Blazor.Services
 @inject IHttpClientFactory HttpClientFactory
+@inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedLocalStorage BrowserStorage
+@inject TransactionFilterState FilterState
 
 <h2>Transaktioner</h2>
 
@@ -9,11 +14,12 @@
     <div>
         <label for="search" class="form-label mb-1">Sök</label>
         <div class="input-group">
-            <input id="search"
-                   class="form-control"
-                   @bind="searchText"
-                   @bind:event="oninput"
-                   placeholder="Sök beskrivning..." />
+            <InputText id="search"
+                       class="form-control"
+                       @bind-Value="searchText"
+                       oninput="this.dispatchEvent(new Event('change'))"
+                       @onchange="OnSearchChanged"
+                       placeholder="Sök beskrivning..." />
             <span class="input-group-text bg-white">
                 <i class="bi bi-search"></i>
             </span>
@@ -23,17 +29,17 @@
         <label class="form-label mb-1">Filtrera</label>
         <div class="btn-group" role="group" aria-label="Filter">
             <button type="button"
-                    class="btn btn-outline-primary @(filterCategory == "all" ? "active" : "")"
+                    class="btn btn-outline-primary @(filterStateLoaded && filterCategory == "all" ? "active" : "")"
                     @onclick='() => SetFilterCategory("all")'>
                 Alla
             </button>
             <button type="button"
-                    class="btn btn-outline-success @(filterCategory == "categorized" ? "active" : "")"
+                    class="btn btn-outline-success @(filterStateLoaded && filterCategory == "categorized" ? "active" : "")"
                     @onclick='() => SetFilterCategory("categorized")'>
                 Kategoriserade
             </button>
             <button type="button"
-                    class="btn btn-outline-warning @(filterCategory == "uncategorized" ? "active" : "")"
+                    class="btn btn-outline-warning @(filterStateLoaded && filterCategory == "uncategorized" ? "active" : "")"
                     @onclick='() => SetFilterCategory("uncategorized")'>
                 Ej kategoriserade
             </button>
@@ -56,6 +62,35 @@
     <div class="alert alert-success" role="alert">@successMessage</div>
 }
 
+@if (selectedTransactionIds.Count > 0)
+{
+    <div class="alert alert-info d-flex flex-column flex-md-row align-items-md-end gap-3" role="alert">
+        <div>
+            <strong>@selectedTransactionIds.Count</strong> transaktion(er) markerade.
+        </div>
+        <div class="flex-grow-1">
+            <label class="form-label mb-1">Välj kategori</label>
+            <select class="form-select form-select-sm"
+                    value="@GetSelectedBulkCategoryValue()"
+                    @onchange="OnBulkCategoryChanged">
+                <option value="">— Välj kategori —</option>
+                @foreach (var category in categories)
+                {
+                    <option value="@category.Id">@GetCategoryDisplayName(category)</option>
+                }
+            </select>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-primary"
+                    @onclick="CategorizeSelectedAsync"
+                    disabled="@IsBulkActionDisabled">
+                @(isBulkCategorizing ? "Kategoriserar..." : $"Kategorisera {selectedTransactionIds.Count}")
+            </button>
+            <button class="btn btn-link text-decoration-none" type="button" @onclick="ClearSelection">Rensa markering</button>
+        </div>
+    </div>
+}
+
 @if (transactions is null)
 {
     <p><em>Laddar...</em></p>
@@ -69,6 +104,12 @@ else
     <table class="table table-bordered table-striped">
         <thead>
             <tr>
+                <th style="width: 48px;">
+                    <input type="checkbox"
+                           class="form-check-input"
+                           @onchange="ToggleSelectAllFiltered"
+                           checked="@AreAllFilteredSelected" />
+                </th>
                 <th>Datum</th>
                 <th>Beskrivning</th>
                 <th>Belopp</th>
@@ -81,23 +122,18 @@ else
             @foreach (var tx in FilteredTransactions)
             {
                 <tr @key="tx.Id">
+                    <td class="text-center">
+                        <input type="checkbox"
+                               class="form-check-input"
+                               checked="@IsSelected(tx.Id)"
+                               @onchange="e => ToggleSelection(tx.Id, e)" />
+                    </td>
                     <td>@tx.TransactionDate.ToShortDateString()</td>
                     <td>@tx.Description</td>
                     <td>@tx.Amount.ToString("F2")</td>
                     <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
                     <td>@(tx.TypeName ?? "—")</td>
-                    <td>
-                        <select class="form-select form-select-sm"
-                                value="@GetSelectedCategoryValue(tx)"
-                                @onchange="async e => await OnCategoryChanged(tx, e)"
-                                disabled="@savingTransactions.Contains(tx.Id)">
-                            <option value="">—</option>
-                            @foreach (var category in categories)
-                            {
-                                <option value="@category.Id">@GetCategoryDisplayName(category)</option>
-                            }
-                        </select>
-                    </td>
+                    <td>@(tx.CategoryName ?? "Ej vald")</td>
                 </tr>
             }
         </tbody>
@@ -107,22 +143,26 @@ else
 @code {
     private List<TransactionDto>? transactions;
     private List<CategoryDto> categories = new();
-    private HashSet<int> savingTransactions = new();
+    private HashSet<int> selectedTransactionIds = new();
+    private int? bulkCategoryId;
+    private bool isBulkCategorizing;
     private string? errorMessage;
     private string? successMessage;
 
     // Filter state
     private string searchText = "";
-    private string filterCategory = "all";
+    private string? filterCategory = null;
+    private const string FilterStateKey = "transactions_filter_state";
+    private bool filterStateLoaded;
 
     // Filtrerad lista
     private List<TransactionDto> FilteredTransactions =>
         transactions?
             .Where(tx =>
                 (string.IsNullOrWhiteSpace(searchText) || tx.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
-                (filterCategory == "all" ||
-                 (filterCategory == "categorized" && tx.CategoryId != null) ||
-                 (filterCategory == "uncategorized" && tx.CategoryId == null))
+                ((filterCategory ?? "all") == "all" ||
+                 ((filterCategory ?? "all") == "categorized" && tx.CategoryId != null) ||
+                 ((filterCategory ?? "all") == "uncategorized" && tx.CategoryId == null))
             )
             .OrderByDescending(t => t.TransactionDate)
             .ToList()
@@ -136,15 +176,14 @@ else
     {
         try
         {
+            await LoadFilterStateAsync();
+
             var client = HttpClientFactory.CreateClient("ApiClient");
 
-            var txTask = client.GetFromJsonAsync<List<TransactionDto>>("api/transactions");
-            var catTask = client.GetFromJsonAsync<List<CategoryDto>>("api/categories");
-
-            await Task.WhenAll(txTask!, catTask!);
-
-            transactions = txTask?.Result ?? new();
-            categories = catTask?.Result ?? new();
+            await Task.WhenAll(
+                LoadTransactionsAsync(client),
+                LoadCategoriesAsync(client)
+            );
         }
         catch (Exception ex)
         {
@@ -153,10 +192,11 @@ else
             categories = new();
             errorMessage = "Kunde inte läsa in data.";
         }
+        finally
+        {
+            filterStateLoaded = true;
+        }
     }
-
-    private string GetSelectedCategoryValue(TransactionDto tx) =>
-        tx.CategoryId?.ToString() ?? string.Empty;
 
     private string GetCategoryDisplayName(CategoryDto category)
     {
@@ -172,16 +212,82 @@ else
         return category.Name;
     }
 
-    private async Task OnCategoryChanged(TransactionDto tx, ChangeEventArgs e)
+    private string GetSelectedBulkCategoryValue() =>
+        bulkCategoryId?.ToString() ?? string.Empty;
+
+    private bool AreAllFilteredSelected
+    {
+        get
+        {
+            var filtered = FilteredTransactions;
+            if (filtered.Count == 0)
+                return false;
+
+            return filtered.All(t => selectedTransactionIds.Contains(t.Id));
+        }
+    }
+
+    private bool IsSelected(int transactionId) => selectedTransactionIds.Contains(transactionId);
+
+    private void ToggleSelection(int transactionId, ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool b && b;
+        if (isChecked)
+        {
+            selectedTransactionIds.Add(transactionId);
+        }
+        else
+        {
+            selectedTransactionIds.Remove(transactionId);
+        }
+    }
+
+    private void ToggleSelectAllFiltered(ChangeEventArgs e)
+    {
+        var filtered = FilteredTransactions;
+        var selectAll = e.Value is bool b && b;
+
+        if (selectAll)
+        {
+            foreach (var tx in filtered)
+                selectedTransactionIds.Add(tx.Id);
+        }
+        else
+        {
+            foreach (var tx in filtered)
+                selectedTransactionIds.Remove(tx.Id);
+        }
+    }
+
+    private void OnBulkCategoryChanged(ChangeEventArgs e)
     {
         var rawValue = e.Value?.ToString();
         if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            bulkCategoryId = null;
+            return;
+        }
+
+        bulkCategoryId = int.TryParse(rawValue, out var value) ? value : null;
+    }
+
+    private bool IsBulkActionDisabled =>
+        isBulkCategorizing || bulkCategoryId is null || selectedTransactionIds.Count == 0;
+
+    private void ClearSelection()
+    {
+        selectedTransactionIds.Clear();
+    }
+
+    private async Task CategorizeSelectedAsync()
+    {
+        if (transactions is null)
             return;
 
-        if (!int.TryParse(rawValue, out var categoryId))
+        if (bulkCategoryId is null || selectedTransactionIds.Count == 0)
             return;
 
-        savingTransactions.Add(tx.Id);
+        isBulkCategorizing = true;
         successMessage = null;
         errorMessage = null;
         StateHasChanged();
@@ -189,23 +295,125 @@ else
         try
         {
             var client = HttpClientFactory.CreateClient("ApiClient");
-            var request = new SetCategoryRequest(categoryId);
+            var selected = transactions
+                .Where(t => selectedTransactionIds.Contains(t.Id))
+                .ToList();
 
-            var response = await client.PutAsJsonAsync(
-                $"api/transactions/{tx.Id}/category",
-                request
-            );
+            var manualTargets = selected.Where(t => t.CategoryId == null).ToList();
+            var changeTargets = selected.Where(t => t.CategoryId != null).ToList();
 
-            if (response.IsSuccessStatusCode)
+            var categorizedCount = 0;
+            var updatedCount = 0;
+            var autoCategorizedCount = 0;
+            var combinedErrors = new List<ManualCategorizeError>();
+
+            // Process uncategorized (manual) grouped by sign to satisfy backend validation
+            foreach (var group in manualTargets.GroupBy(t => t.Amount >= 0m))
             {
-                tx.CategoryId = categoryId;
-                UpdateCategoryFields(tx);
-                successMessage = "Kategori uppdaterad!";
+                var manualRequests = group
+                    .Select(t => new CategorizeRequest(t.Id, bulkCategoryId.Value))
+                    .ToList();
+
+                var manualResponse = await client.PostAsJsonAsync(
+                    "api/transactions/manual-categorize",
+                    manualRequests
+                );
+
+                if (!manualResponse.IsSuccessStatusCode)
+                {
+                    var details = await manualResponse.Content.ReadAsStringAsync();
+                    errorMessage =
+                        $"Kunde inte kategorisera valda transaktioner. ({(int)manualResponse.StatusCode}) {details}";
+                    return;
+                }
+
+                var manualResult =
+                    await manualResponse.Content.ReadFromJsonAsync<ManualCategorizeResponse>()
+                    ?? new ManualCategorizeResponse();
+
+                categorizedCount += manualResult.Categorized;
+                autoCategorizedCount += manualResult.AutoCategorized;
+                combinedErrors.AddRange(manualResult.Errors);
+
+                var manualFailedIds = manualResult.Errors.Select(e => e.TransactionId).ToHashSet();
+
+                foreach (var tx in group)
+                {
+                    if (manualFailedIds.Contains(tx.Id))
+                        continue;
+
+                    tx.CategoryId = bulkCategoryId;
+                    UpdateCategoryFields(tx);
+                    selectedTransactionIds.Remove(tx.Id);
+                }
             }
-            else
+
+            // Process already categorized (change) grouped by sign to satisfy backend validation
+            foreach (var group in changeTargets.GroupBy(t => t.Amount >= 0m))
             {
-                var details = await response.Content.ReadAsStringAsync();
-                errorMessage = $"Kunde inte uppdatera kategori. ({(int)response.StatusCode}) {details}";
+                var changeRequests = group
+                    .Select(t => new ChangeCategoryRequest(t.Id, bulkCategoryId.Value))
+                    .ToList();
+
+                var changeResponse = await client.PostAsJsonAsync(
+                    "api/transactions/change-category",
+                    changeRequests
+                );
+
+                if (!changeResponse.IsSuccessStatusCode)
+                {
+                    var details = await changeResponse.Content.ReadAsStringAsync();
+                    errorMessage =
+                        $"Kunde inte uppdatera kategoriserade transaktioner. ({(int)changeResponse.StatusCode}) {details}";
+                    return;
+                }
+
+                var changeResult =
+                    await changeResponse.Content.ReadFromJsonAsync<ChangeCategoryResponse>()
+                    ?? new ChangeCategoryResponse();
+
+                updatedCount += changeResult.Updated;
+                var changeFailedIds = changeResult.Errors.Select(e => e.TransactionId).ToHashSet();
+                var changeErrors = changeResult.Errors
+                    .Select(e => new ManualCategorizeError { TransactionId = e.TransactionId, Message = e.Message })
+                    .ToList();
+                combinedErrors.AddRange(changeErrors);
+
+                foreach (var tx in group)
+                {
+                    if (changeFailedIds.Contains(tx.Id))
+                        continue;
+
+                    tx.CategoryId = bulkCategoryId;
+                    UpdateCategoryFields(tx);
+                    selectedTransactionIds.Remove(tx.Id);
+                }
+            }
+
+            var successParts = new List<string>();
+            if (categorizedCount > 0)
+                successParts.Add($"Kategoriserade {categorizedCount} transaktion(er)");
+            if (updatedCount > 0)
+                successParts.Add($"Uppdaterade {updatedCount} transaktion(er)");
+            if (autoCategorizedCount > 0)
+                successParts.Add($"Auto-kategoriserade {autoCategorizedCount} liknande transaktion(er)");
+
+            successMessage = successParts.Count > 0 ? string.Join(". ", successParts) + "." : null;
+
+            var anyChanges = categorizedCount > 0 || updatedCount > 0 || autoCategorizedCount > 0;
+            if (anyChanges)
+            {
+                await RefreshTransactionsAsync();
+                selectedTransactionIds.Clear();
+            }
+
+            if (combinedErrors.Count > 0)
+            {
+                var errorList = string.Join(
+                    ", ",
+                    combinedErrors.Select(e => $"{e.TransactionId}: {e.Message}")
+                );
+                errorMessage = $"Vissa transaktioner kunde inte hanteras: {errorList}";
             }
         }
         catch (Exception ex)
@@ -214,7 +422,7 @@ else
         }
         finally
         {
-            savingTransactions.Remove(tx.Id);
+            isBulkCategorizing = false;
             StateHasChanged();
         }
     }
@@ -256,5 +464,89 @@ else
     private void SetFilterCategory(string category)
     {
         filterCategory = category;
+        _ = SaveFilterStateAsync();
+    }
+
+    private async Task OnSearchChanged(ChangeEventArgs e)
+    {
+        searchText = e.Value?.ToString() ?? "";
+        await SaveFilterStateAsync();
+    }
+
+    private async Task LoadFilterStateAsync()
+    {
+        // 1) Läs från in-memory state (Blazor circuit). Ingen async/lagg.
+        filterCategory = FilterState.FilterCategory;
+        searchText = FilterState.SearchText;
+
+        // 2) Hämta ev. persisted state (för browser refresh). Uppdatera både lokal state och container.
+        try
+        {
+            var result = await BrowserStorage.GetAsync<FilterStatePayload>(FilterStateKey);
+            if (result.Success && result.Value is FilterStatePayload state)
+            {
+                filterCategory = state.FilterCategory ?? filterCategory ?? "all";
+                searchText = state.SearchText ?? searchText ?? string.Empty;
+                FilterState.FilterCategory = filterCategory ?? "all";
+                FilterState.SearchText = searchText ?? string.Empty;
+                FilterState.IsLoadedFromStorage = true;
+            }
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
+
+    private async Task SaveFilterStateAsync()
+    {
+        FilterState.FilterCategory = filterCategory ?? "all";
+        FilterState.SearchText = searchText ?? string.Empty;
+
+        var state = new FilterStatePayload
+        {
+            SearchText = FilterState.SearchText,
+            FilterCategory = FilterState.FilterCategory,
+        };
+        try
+        {
+            await BrowserStorage.SetAsync(FilterStateKey, state);
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
+
+    private async Task LoadTransactionsAsync(HttpClient client)
+    {
+        var data = await client.GetFromJsonAsync<List<TransactionDto>>("api/transactions");
+        transactions = data ?? new();
+    }
+
+    private async Task LoadCategoriesAsync(HttpClient client)
+    {
+        var data = await client.GetFromJsonAsync<List<CategoryDto>>("api/categories");
+        categories = data ?? new();
+    }
+
+    private async Task RefreshTransactionsAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            await LoadTransactionsAsync(client);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Fel vid uppdatering: {ex.Message}");
+            errorMessage = "Kunde inte uppdatera transaktionerna efter kategorisering.";
+        }
+    }
+
+    private class FilterStatePayload
+    {
+        public string? SearchText { get; set; }
+        public string? FilterCategory { get; set; }
     }
 }
