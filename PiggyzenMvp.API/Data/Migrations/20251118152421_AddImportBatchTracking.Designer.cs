@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PiggyzenMvp.API.Data;
 
@@ -10,9 +11,11 @@ using PiggyzenMvp.API.Data;
 namespace PiggyzenMvp.API.Data.Migrations
 {
     [DbContext(typeof(PiggyzenMvpContext))]
-    partial class PiggyzenMvpContextModelSnapshot : ModelSnapshot
+    [Migration("20251118152421_AddImportBatchTracking")]
+    partial class AddImportBatchTracking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.7");
@@ -78,14 +81,11 @@ namespace PiggyzenMvp.API.Data.Migrations
                     b.Property<int>("CategorizationRuleId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int?>("Source")
+                    b.Property<int>("TransactionId")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("TransactionDate")
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("TransactionId")
-                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("UsedAt")
                         .HasColumnType("TEXT");
@@ -124,93 +124,6 @@ namespace PiggyzenMvp.API.Data.Migrations
                     b.HasIndex("ParentCategoryId");
 
                     b.ToTable("Categories");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            IsSystemCategory = true,
-                            Name = "Income"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            IsSystemCategory = true,
-                            Name = "Housing"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            IsSystemCategory = true,
-                            Name = "Vehicle"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            IsSystemCategory = true,
-                            Name = "Fixed Expenses"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            IsSystemCategory = true,
-                            Name = "Variable Expenses"
-                        },
-                        new
-                        {
-                            Id = 6,
-                            IsSystemCategory = true,
-                            Name = "Transfers"
-                        });
-                });
-
-            modelBuilder.Entity("PiggyzenMvp.API.Models.Transaction", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal?>("Balance")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("BookingDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("CategoryId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ImportId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("ImportSequence")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("ImportedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("NormalizedDescription")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RawRow")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("TransactionDate")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CategoryId");
-
-                    b.ToTable("Transactions");
                 });
 
             modelBuilder.Entity("PiggyzenMvp.API.Models.CategorizationRule", b =>
@@ -251,6 +164,55 @@ namespace PiggyzenMvp.API.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("ParentCategory");
+                });
+
+            modelBuilder.Entity("PiggyzenMvp.API.Models.Transaction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Balance")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("BookingDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImportBatchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImportId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedDescription")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RawRow")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SequenceInBatch")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("TransactionDate")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.ToTable("Transactions");
                 });
 
             modelBuilder.Entity("PiggyzenMvp.API.Models.Transaction", b =>

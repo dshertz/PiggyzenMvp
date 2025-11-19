@@ -12,6 +12,9 @@ namespace PiggyzenMvp.API.Models
         public int? CategoryId { get; set; }
         public Category? Category { get; set; }
         public required string ImportId { get; set; }
+        public required DateTime ImportedAtUtc { get; set; }
+        public required int ImportSequence { get; set; }
+        public string? RawRow { get; set; }
         public CategorizationUsage? CategorizationUsage { get; set; }
     }
 }

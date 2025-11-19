@@ -14,14 +14,27 @@
     <button type="submit" class="btn btn-primary mt-2">Import</button>
 </EditForm>
 
-@if (importErrors?.Any() == true)
+@if (parsingErrors?.Any() == true)
 {
     <div class="alert alert-warning mt-4" style="white-space: pre-wrap;">
         <strong>⚠️ Fel i importen:</strong>
         <ul>
-            @foreach (var error in importErrors)
+            @foreach (var error in parsingErrors)
             {
                 <li>@error</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (duplicateWarnings?.Any() == true)
+{
+    <div class="alert alert-info mt-4" style="white-space: pre-wrap;">
+        <strong>ℹ️ Dublettvarningar:</strong>
+        <ul>
+            @foreach (var warning in duplicateWarnings)
+            {
+                <li>@warning</li>
             }
         </ul>
     </div>
@@ -44,6 +57,13 @@
                 <li>Tx #@item.TransactionId – @item.Message</li>
             }
         </ul>
+    </div>
+}
+
+@if (importedAtUtc.HasValue)
+{
+    <div class="alert alert-secondary mt-4">
+        <strong>Importerades:</strong> @importedAtUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
     </div>
 }
 
@@ -86,18 +106,22 @@
 @code {
     private TransactionImportRequest importRequest = new();
     private List<TransactionImportDto>? parsedTransactions;
-    private List<string>? importErrors;
+    private List<string>? parsingErrors;
+    private List<string>? duplicateWarnings;
     private int autoCategorizedCount;
     private List<AutoCategorizeError>? autoCategorizeErrors;
+    private DateTime? importedAtUtc;
     private string? errorMessage;
 
     private async Task ImportTransactions()
     {
         errorMessage = null;
         parsedTransactions = null;
-        importErrors = null;
+        parsingErrors = null;
+        duplicateWarnings = null;
         autoCategorizedCount = 0;
         autoCategorizeErrors = null;
+        importedAtUtc = null;
 
         if (string.IsNullOrWhiteSpace(importRequest.RawText))
         {
@@ -115,10 +139,12 @@
             if (response.IsSuccessStatusCode)
             {
                 var result = await response.Content.ReadFromJsonAsync<ImportResult>();
-                parsedTransactions = result?.Transactions ?? new();
-                importErrors = result?.Errors ?? new();
-                autoCategorizedCount = result?.AutoCategorized ?? 0;
+                parsedTransactions = result?.ImportedTransactions ?? new();
+                parsingErrors = result?.ParsingErrors ?? new();
+                duplicateWarnings = result?.DuplicateWarnings ?? new();
+                autoCategorizedCount = result?.AutoCategorizedCount ?? 0;
                 autoCategorizeErrors = result?.AutoCategorizeErrors ?? new();
+                importedAtUtc = result?.ImportedAtUtc;
             }
             else
             {
@@ -155,10 +181,12 @@
 
     public class ImportResult
     {
-        public List<TransactionImportDto> Transactions { get; set; } = new();
-        public List<string> Errors { get; set; } = new();
-        public int AutoCategorized { get; set; }
+        public List<TransactionImportDto> ImportedTransactions { get; set; } = new();
+        public List<string> ParsingErrors { get; set; } = new();
+        public List<string> DuplicateWarnings { get; set; } = new();
+        public int AutoCategorizedCount { get; set; }
         public List<AutoCategorizeError> AutoCategorizeErrors { get; set; } = new();
+        public DateTime? ImportedAtUtc { get; set; }
     }
 
     public class AutoCategorizeError

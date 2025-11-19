@@ -7,27 +7,43 @@ namespace PiggyzenMvp.API.Services
     {
         private readonly NormalizeService _normalizeService;
 
-        public List<string> Errors { get; private set; } = new();
-
         public TransactionImportService(NormalizeService normalizeService)
         {
             _normalizeService = normalizeService;
         }
 
-        public List<TransactionImportDto> ParseRawInput(string rawText)
+        public TransactionImportParseResult ParseRawInput(string rawText)
         {
-            Errors.Clear();
+            var result = new TransactionImportParseResult();
+
+            if (string.IsNullOrWhiteSpace(rawText))
+            {
+                result.ParsingErrors.Add("No input provided.");
+                return result;
+            }
 
             var normalized = NormalizeLineEndings(rawText);
             var rows = SplitIntoRows(normalized);
-            return TryStructuredParse(rows);
+
+            if (rows.Count == 0)
+            {
+                result.ParsingErrors.Add("No usable rows found.");
+                return result;
+            }
+
+            TryStructuredParse(rows, result);
+
+            if (!result.Transactions.Any() && !result.ParsingErrors.Any())
+            {
+                result.ParsingErrors.Add("No valid rows found.");
+            }
+
+            return result;
         }
 
         private string NormalizeLineEndings(string input)
         {
-            return string.IsNullOrWhiteSpace(input)
-                ? string.Empty
-                : input.Replace("\r\n", "\n").Replace("\r", "\n").Trim();
+            return input.Replace("\r\n", "\n").Replace("\r", "\n").Trim();
         }
 
         private List<string> SplitIntoRows(string normalized)
@@ -39,18 +55,16 @@ namespace PiggyzenMvp.API.Services
                 .ToList();
         }
 
-        private List<TransactionImportDto> TryStructuredParse(List<string> rows)
+        private void TryStructuredParse(List<string> rows, TransactionImportParseResult result)
         {
-            var results = new List<TransactionImportDto>();
-
             for (int i = 0; i < rows.Count; i++)
             {
                 var row = rows[i];
                 int lineNumber = i + 1;
 
-                if (!TryGuessSeparator(row, out var workingSeparator, out var parts))
+                if (!TryGuessSeparator(row, out _, out var parts))
                 {
-                    Errors.Add(
+                    result.ParsingErrors.Add(
                         $"Rad {lineNumber}: Kunde inte tolka – ingen separator gav 5 kolumner. Raden var: \"{row}\""
                     );
                     continue;
@@ -58,13 +72,15 @@ namespace PiggyzenMvp.API.Services
 
                 if (!TryParseDate(parts[0], out var bookingDate))
                 {
-                    Errors.Add($"Rad {lineNumber}: Ogiltigt bokföringsdatum: \"{parts[0]}\"");
+                    result.ParsingErrors.Add($"Rad {lineNumber}: Ogiltigt bokföringsdatum: \"{parts[0]}\"");
                     continue;
                 }
 
                 if (!TryParseDate(parts[1], out var transactionDate))
                 {
-                    Errors.Add($"Rad {lineNumber}: Ogiltigt transaktionsdatum: \"{parts[1]}\"");
+                    result.ParsingErrors.Add(
+                        $"Rad {lineNumber}: Ogiltigt transaktionsdatum: \"{parts[1]}\""
+                    );
                     continue;
                 }
 
@@ -72,37 +88,33 @@ namespace PiggyzenMvp.API.Services
 
                 if (!TryParseAmount(parts[3], out var amount))
                 {
-                    Errors.Add($"Rad {lineNumber}: Ogiltigt belopp: \"{parts[3]}\"");
+                    result.ParsingErrors.Add($"Rad {lineNumber}: Ogiltigt belopp: \"{parts[3]}\"");
                     continue;
                 }
 
                 if (!TryParseAmount(parts[4], out var balance))
                 {
-                    Errors.Add($"Rad {lineNumber}: Ogiltigt saldo: \"{parts[4]}\"");
+                    result.ParsingErrors.Add($"Rad {lineNumber}: Ogiltigt saldo: \"{parts[4]}\"");
                     continue;
                 }
 
-                results.Add(
+                var normalizedDescription = _normalizeService.Normalize(description);
+
+                result.Transactions.Add(
                     new TransactionImportDto
                     {
                         BookingDate = bookingDate,
                         TransactionDate = transactionDate!.Value,
                         Description = description,
+                        NormalizedDescription = normalizedDescription,
                         Amount = amount!.Value,
                         Balance = balance,
-                        ImportId = GenerateImportId(
-                            bookingDate,
-                            transactionDate.Value,
-                            description,
-                            amount.Value,
-                            balance
-                        ),
+                        ImportId = GenerateImportId(transactionDate.Value, normalizedDescription, amount.Value),
                         SourceLineNumber = lineNumber,
+                        RawRow = row,
                     }
                 );
             }
-
-            return results;
         }
 
         private bool TryGuessSeparator(string row, out char? separator, out string[] parts)
@@ -159,90 +171,9 @@ namespace PiggyzenMvp.API.Services
                 : (amount = null) != null;
         }
 
-        private string GenerateImportId(
-            DateTime? bookingDate,
-            DateTime transactionDate,
-            string description,
-            decimal amount,
-            decimal? balance
-        )
+        private string GenerateImportId(DateTime transactionDate, string normalizedDescription, decimal amount)
         {
-            var bookingDatePart = bookingDate?.ToString("yyyyMMdd") ?? "N/A";
-            var balancePart = balance?.ToString("F2") ?? "N/A";
-            return $"{bookingDatePart}|{transactionDate:yyyyMMdd}|{description}|{amount:F2}|{balancePart}";
+            return $"{transactionDate:yyyy-MM-dd}|{normalizedDescription}|{amount:F2}";
         }
     }
 }
-
-/* private List<TransactionImportDto> TryStructuredParse(List<string> rows)
-{
-    var results = new List<TransactionImportDto>();
-    char? separator = GuessSeparator(rows);
-
-    if (separator == null)
-    {
-        Errors.Add(
-            "Kunde inte identifiera kolumnseparator (försökte tab, semikolon, komma)."
-        );
-        return results;
-    }
-
-    foreach (var row in rows)
-    {
-        var parts = row.Split(separator.Value).Select(p => p.Trim()).ToArray();
-
-        if (parts.Length != 5)
-        {
-            Errors.Add(
-                $"Felaktigt antal kolumner ({parts.Length}) i rad: \"{row}\" – förväntar exakt 5 kolumner."
-            );
-            continue;
-        }
-
-        if (!TryParseDate(parts[0], out var bookingDate))
-        {
-            Errors.Add($"Ogiltigt bokföringsdatum: \"{parts[0]}\" i rad: \"{row}\"");
-            continue;
-        }
-
-        if (!TryParseDate(parts[1], out var transactionDate))
-        {
-            Errors.Add($"Ogiltigt transaktionsdatum: \"{parts[1]}\" i rad: \"{row}\"");
-            continue;
-        }
-
-        string description = parts[2];
-
-        if (!TryParseAmount(parts[3], out var amount))
-        {
-            Errors.Add($"Ogiltigt belopp: \"{parts[3]}\" i rad: \"{row}\"");
-            continue;
-        }
-
-        if (!TryParseAmount(parts[4], out var balance))
-        {
-            Errors.Add($"Ogiltigt saldo: \"{parts[4]}\" i rad: \"{row}\"");
-            continue;
-        }
-
-        results.Add(
-            new TransactionImportDto
-            {
-                BookingDate = bookingDate,
-                TransactionDate = transactionDate!.Value,
-                Description = description,
-                Amount = amount!.Value,
-                Balance = balance,
-                ImportId = GenerateImportId(
-                    bookingDate,
-                    transactionDate.Value,
-                    description,
-                    amount.Value,
-                    balance
-                ),
-            }
-        );
-    }
-
-    return results;
-} */

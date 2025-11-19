@@ -14,19 +14,16 @@ public class TransactionsController : ControllerBase
 {
     private readonly PiggyzenMvpContext _context;
     private readonly TransactionImportService _importService;
-    private readonly NormalizeService _normalizeService;
     private readonly CategorizationService _categorizationService;
 
     public TransactionsController(
         PiggyzenMvpContext context,
         TransactionImportService importService,
-        NormalizeService normalizeService,
         CategorizationService categorizationService
     )
     {
         _context = context;
         _importService = importService;
-        _normalizeService = normalizeService;
         _categorizationService = categorizationService;
     }
 
@@ -74,7 +71,10 @@ public class TransactionsController : ControllerBase
 
     [HttpPost("import")]
     [Consumes("text/plain")]
-    public async Task<ActionResult<ImportResult>> ImportFromRawText([FromBody] string rawText)
+    public async Task<ActionResult<ImportResult>> ImportFromRawText(
+        [FromBody] string rawText,
+        CancellationToken ct
+    )
     {
         if (string.IsNullOrWhiteSpace(rawText))
         {
@@ -88,39 +88,81 @@ public class TransactionsController : ControllerBase
             );
         }
 
-        var parsed = _importService.ParseRawInput(rawText);
-        var existingIds = await _context.Transactions.Select(t => t.ImportId).ToListAsync();
-
-        foreach (var dto in parsed)
+        var parseResult = _importService.ParseRawInput(rawText);
+        var response = new ImportResult
         {
-            if (existingIds.Contains(dto.ImportId))
-            {
-                _importService.Errors.Add(
-                    $"Rad {dto.SourceLineNumber}: Transaktionen finns redan – \"{dto.Description}\" {dto.TransactionDate:yyyy-MM-dd}"
-                );
-            }
+            ParsingErrors = parseResult.ParsingErrors.ToList(),
+        };
+
+        var parsedDtos = parseResult.Transactions;
+
+        if (!parsedDtos.Any())
+        {
+            return Ok(response);
         }
 
-        var newTransactions = parsed
-            .Where(dto => !existingIds.Contains(dto.ImportId))
-            .Select(dto => new Transaction
+        var dtoDates = parsedDtos.Select(dto => dto.TransactionDate.Date).Distinct().ToList();
+
+        var existingImportIds = await _context.Transactions
+            .Where(t => dtoDates.Contains(t.TransactionDate.Date))
+            .Select(t => t.ImportId)
+            .ToListAsync(ct);
+
+        var existingIdSet = existingImportIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var duplicateWarnings = new List<string>();
+        var newDtos = new List<TransactionImportDto>();
+
+        foreach (var dto in parsedDtos)
+        {
+            if (existingIdSet.Contains(dto.ImportId))
             {
-                BookingDate = dto.BookingDate,
-                TransactionDate = dto.TransactionDate,
-                Description = dto.Description,
-                NormalizedDescription = _normalizeService.Normalize(dto.Description),
-                Amount = dto.Amount,
-                Balance = dto.Balance,
-                ImportId = dto.ImportId,
-            })
-            .ToList();
+                duplicateWarnings.Add(
+                    $"Rad {dto.SourceLineNumber}: transaktionen finns redan – \"{dto.Description}\" {dto.TransactionDate:yyyy-MM-dd}"
+                );
+                continue;
+            }
+
+            newDtos.Add(dto);
+        }
+
+        response.DuplicateWarnings = duplicateWarnings;
+
+        if (!newDtos.Any())
+        {
+            response.DuplicateWarnings.Add("No new transactions were imported.");
+            return Ok(response);
+        }
+
+        var importedAt = DateTime.UtcNow;
+        var sequence = 1;
+        var newTransactions = new List<Transaction>();
+
+        foreach (var dto in newDtos)
+        {
+            newTransactions.Add(
+                new Transaction
+                {
+                    BookingDate = dto.BookingDate,
+                    TransactionDate = dto.TransactionDate,
+                    Description = dto.Description,
+                    NormalizedDescription = dto.NormalizedDescription,
+                    Amount = dto.Amount,
+                    Balance = dto.Balance,
+                    ImportId = dto.ImportId,
+                    ImportedAtUtc = importedAt,
+                    ImportSequence = sequence++,
+                    RawRow = dto.RawRow,
+                }
+            );
+        }
 
         List<AutoCategorizeResult>? autoResults = null;
 
         if (newTransactions.Any())
         {
-            await _context.Transactions.AddRangeAsync(newTransactions);
-            await _context.SaveChangesAsync();
+            await _context.Transactions.AddRangeAsync(newTransactions, ct);
+            await _context.SaveChangesAsync(ct);
 
             var newIds = newTransactions.Select(t => t.Id).ToList();
             var autoCategorizeResults = await _categorizationService.AutoCategorizeBatchAsync(
@@ -128,18 +170,6 @@ public class TransactionsController : ControllerBase
             );
             autoResults = autoCategorizeResults.ToList();
         }
-
-        var importedDtos = newTransactions
-            .Select(t => new TransactionDto
-            {
-                BookingDate = t.BookingDate,
-                TransactionDate = t.TransactionDate,
-                Description = t.Description,
-                Amount = t.Amount,
-                Balance = t.Balance,
-                CategoryName = null,
-            })
-            .ToList();
 
         var autoCategorizedCount = autoResults?.Count(r => r.Error == null) ?? 0;
         var autoCategorizeErrors =
@@ -152,15 +182,12 @@ public class TransactionsController : ControllerBase
                 })
                 .ToList() ?? new List<AutoCategorizeErrorDto>();
 
-        return Ok(
-            new ImportResult
-            {
-                Transactions = importedDtos,
-                Errors = _importService.Errors,
-                AutoCategorized = autoCategorizedCount,
-                AutoCategorizeErrors = autoCategorizeErrors,
-            }
-        );
+        response.ImportedTransactions = newDtos;
+        response.AutoCategorizedCount = autoCategorizedCount;
+        response.AutoCategorizeErrors = autoCategorizeErrors;
+        response.ImportedAtUtc = importedAt;
+
+        return Ok(response);
     }
 
     [HttpGet("{id}/similar-uncategorized")]
