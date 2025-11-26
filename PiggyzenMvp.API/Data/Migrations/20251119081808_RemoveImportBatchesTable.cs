@@ -8,11 +8,8 @@ namespace PiggyzenMvp.API.Data.Migrations
     public partial class RemoveImportBatchesTable : Migration
     {
         /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropTable(
-                name: "ImportBatches");
-        }
+        protected override void Up(MigrationBuilder migrationBuilder) =>
+            migrationBuilder.Sql("DROP TABLE IF EXISTS \"ImportBatches\";");
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)

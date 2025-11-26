@@ -198,19 +198,10 @@ else
         }
     }
 
-    private string GetCategoryDisplayName(CategoryDto category)
-    {
-        if (category.ParentCategoryId is int parentId)
-        {
-            var parent = categories.FirstOrDefault(c => c.Id == parentId);
-            if (parent != null)
-            {
-                return $"{parent.Name} / {category.Name}";
-            }
-        }
-
-        return category.Name;
-    }
+    private string GetCategoryDisplayName(CategoryDto category) =>
+        string.IsNullOrWhiteSpace(category.GroupDisplayName)
+            ? category.EffectiveName
+            : $"{category.GroupDisplayName} / {category.EffectiveName}";
 
     private string GetSelectedBulkCategoryValue() =>
         bulkCategoryId?.ToString() ?? string.Empty;
@@ -442,23 +433,9 @@ else
             return;
         }
 
-        tx.CategoryName = category.Name;
-
-        if (category.IsSystemCategory)
-        {
-            tx.TypeId = category.Id;
-            tx.TypeName = category.Name;
-        }
-        else if (category.ParentCategoryId is int parentId)
-        {
-            tx.TypeId = parentId;
-            tx.TypeName = categories.FirstOrDefault(c => c.Id == parentId)?.Name;
-        }
-        else
-        {
-            tx.TypeId = null;
-            tx.TypeName = null;
-        }
+        tx.CategoryName = category.EffectiveName;
+        tx.TypeId = category.GroupId;
+        tx.TypeName = category.GroupDisplayName;
     }
 
     private void SetFilterCategory(string category)
@@ -526,8 +503,13 @@ else
 
     private async Task LoadCategoriesAsync(HttpClient client)
     {
-        var data = await client.GetFromJsonAsync<List<CategoryDto>>("api/categories");
-        categories = data ?? new();
+        var data = await client.GetFromJsonAsync<List<CategoryGroupDto>>("api/categories");
+        categories = data?
+            .SelectMany(g => g.Categories)
+            .Where(c => c.IsActive && !c.IsHidden)
+            .OrderBy(c => c.GroupId)
+            .ThenBy(c => c.SortOrder)
+            .ToList() ?? new();
     }
 
     private async Task RefreshTransactionsAsync()
