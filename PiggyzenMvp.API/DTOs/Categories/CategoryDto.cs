@@ -1,10 +1,18 @@
-namespace PiggyzenMvp.API.DTOs
+namespace PiggyzenMvp.API.DTOs;
+
+public record CategoryDto(
+    int Id,
+    int GroupId,
+    string GroupKey,
+    string GroupDisplayName,
+    string Key,
+    string DisplayName,
+    string? UserDisplayName,
+    bool IsSystemCategory,
+    bool IsActive,
+    bool IsHidden,
+    int SortOrder
+)
 {
-    public class CategoryDto
-    {
-        public int Id { get; init; }
-        public string Name { get; init; } = "";
-        public int? ParentCategoryId { get; init; }
-        public bool IsSystemCategory { get; init; }
-    }
+    public string EffectiveName => UserDisplayName ?? DisplayName;
 }

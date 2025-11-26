@@ -50,12 +50,12 @@ namespace PiggyzenMvp.API.Services
                 return new ManualCategorizationResult("Transaction is already categorized.", 0);
 
             var category = await _context
-                .Categories.Include(c => c.ParentCategory)
+                .Categories.Include(c => c.Group)
                 .FirstOrDefaultAsync(c => c.Id == categoryId, ct);
             if (category == null)
                 return new ManualCategorizationResult("Category not found.", 0);
 
-            var signError = ValidateAmountSign(t.Amount, category, category.ParentCategory);
+            var signError = ValidateAmountSign(t.Amount, category);
             if (signError != null)
                 return new ManualCategorizationResult(signError, 0);
 
@@ -142,12 +142,12 @@ namespace PiggyzenMvp.API.Services
                 return null;
 
             var newCategory = await _context
-                .Categories.Include(c => c.ParentCategory)
+                .Categories.Include(c => c.Group)
                 .FirstOrDefaultAsync(c => c.Id == newCategoryId, ct);
             if (newCategory == null)
                 return "Category not found.";
 
-            var signError = ValidateAmountSign(tx.Amount, newCategory, newCategory.ParentCategory);
+            var signError = ValidateAmountSign(tx.Amount, newCategory);
             if (signError != null)
                 return signError;
 
@@ -482,27 +482,27 @@ namespace PiggyzenMvp.API.Services
             return false;
         }
 
-        private static SignRule GetSignRuleForSystemCategory(string? systemName)
+        private static SignRule GetSignRuleForGroup(string? groupKey)
         {
-            return systemName switch
+            return groupKey switch
             {
-                "Income" => SignRule.MustBePositive,
-                "Variable Expenses" => SignRule.MustBeNegative,
-                "Fixed Expenses" => SignRule.MustBeNegative,
-                "Housing" => SignRule.MustBeNegative,
-                "Vehicle" => SignRule.MustBeNegative,
-                "Transfers" => SignRule.CanBeEither,
+                "income" => SignRule.MustBePositive,
+                "transfers" => SignRule.CanBeEither,
+                "housing" => SignRule.MustBeNegative,
+                "vehicle" => SignRule.MustBeNegative,
+                "fixed-expenses" => SignRule.MustBeNegative,
+                "variable-expenses" => SignRule.MustBeNegative,
                 _ => SignRule.CanBeEither,
             };
         }
 
-        private static string? ValidateAmountSign(decimal amount, Category category, Category? parentCategory)
+        private static string? ValidateAmountSign(decimal amount, Category category)
         {
-            var systemCategory = category.IsSystemCategory ? category : parentCategory;
-            if (systemCategory == null)
+            var group = category.Group;
+            if (group == null)
                 return null;
 
-            var rule = GetSignRuleForSystemCategory(systemCategory.Name);
+            var rule = GetSignRuleForGroup(group.Key);
             var isValid = rule switch
             {
                 SignRule.MustBePositive => amount > 0,
@@ -514,7 +514,7 @@ namespace PiggyzenMvp.API.Services
             if (isValid)
                 return null;
 
-            return $"Beloppet {amount} är inte giltigt för systemkategorin '{systemCategory.Name}'.";
+            return $"Beloppet {amount} är inte giltigt för kategorigruppen '{group.DisplayName}'.";
         }
 
         public async Task<(

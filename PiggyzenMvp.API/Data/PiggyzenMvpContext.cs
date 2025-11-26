@@ -9,6 +9,7 @@ namespace PiggyzenMvp.API.Data
             : base(options) { }
 
         public DbSet<Transaction> Transactions { get; set; }
+        public DbSet<CategoryGroup> CategoryGroups { get; set; }
         public DbSet<Category> Categories { get; set; }
         public DbSet<CategorizationRule> CategorizationRules { get; set; }
         public DbSet<CategorizationUsage> CategorizationUsages { get; set; }
@@ -17,13 +18,28 @@ namespace PiggyzenMvp.API.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Category: self reference
+            // Category groups
+            modelBuilder
+                .Entity<CategoryGroup>()
+                .HasIndex(g => g.Key)
+                .IsUnique();
+            modelBuilder.Entity<CategoryGroup>().Property(g => g.DisplayName).HasMaxLength(128);
+            modelBuilder.Entity<CategoryGroup>().Property(g => g.Id).ValueGeneratedNever();
+
+            // Categories
             modelBuilder
                 .Entity<Category>()
-                .HasOne(c => c.ParentCategory)
-                .WithMany()
-                .HasForeignKey(c => c.ParentCategoryId)
+                .HasOne(c => c.Group)
+                .WithMany(g => g.Categories)
+                .HasForeignKey(c => c.GroupId)
                 .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder
+                .Entity<Category>()
+                .HasIndex(c => new { c.GroupId, c.Key })
+                .IsUnique();
+            modelBuilder.Entity<Category>().Property(c => c.DisplayName).HasMaxLength(128);
+            modelBuilder.Entity<Category>().Property(c => c.UserDisplayName).HasMaxLength(128);
+            modelBuilder.Entity<Category>().Property(c => c.Key).HasMaxLength(128);
 
             // Transaction ↔ CategorizationUsage (1:1)
             modelBuilder
@@ -78,48 +94,7 @@ namespace PiggyzenMvp.API.Data
                 .Entity<CategorizationUsage>()
                 .Property(u => u.Amount)
                 .HasColumnType("decimal(18,2)");
-
-            // Seeds
-            modelBuilder
-                .Entity<Category>()
-                .HasData(
-                    new Category
-                    {
-                        Id = 1,
-                        Name = "Income",
-                        IsSystemCategory = true,
-                    },
-                    new Category
-                    {
-                        Id = 2,
-                        Name = "Housing",
-                        IsSystemCategory = true,
-                    },
-                    new Category
-                    {
-                        Id = 3,
-                        Name = "Vehicle",
-                        IsSystemCategory = true,
-                    },
-                    new Category
-                    {
-                        Id = 4,
-                        Name = "Fixed Expenses",
-                        IsSystemCategory = true,
-                    },
-                    new Category
-                    {
-                        Id = 5,
-                        Name = "Variable Expenses",
-                        IsSystemCategory = true,
-                    },
-                    new Category
-                    {
-                        Id = 6,
-                        Name = "Transfers",
-                        IsSystemCategory = true,
-                    }
-                );
+            // Seeds handled outside OnModelCreating to preserve user overrides
         }
     }
 }

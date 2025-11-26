@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PiggyzenMvp.API.Data;
 
@@ -10,9 +11,11 @@ using PiggyzenMvp.API.Data;
 namespace PiggyzenMvp.API.Data.Migrations
 {
     [DbContext(typeof(PiggyzenMvpContext))]
-    partial class PiggyzenMvpContextModelSnapshot : ModelSnapshot
+    [Migration("20251125105749_AddCategoryGroups")]
+    partial class AddCategoryGroups
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.7");
@@ -20,7 +23,7 @@ namespace PiggyzenMvp.API.Data.Migrations
             modelBuilder.Entity("PiggyzenMvp.API.Models.CategorizationRule", b =>
                 {
                     b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
+                        .ValueGeneratedNever()
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("CategoryId")
@@ -149,6 +152,7 @@ namespace PiggyzenMvp.API.Data.Migrations
             modelBuilder.Entity("PiggyzenMvp.API.Models.CategoryGroup", b =>
                 {
                     b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("DisplayName")

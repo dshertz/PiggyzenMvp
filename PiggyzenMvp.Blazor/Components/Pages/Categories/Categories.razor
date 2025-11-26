@@ -1,6 +1,8 @@
 @page "/categories"
 @rendermode InteractiveServer
+@using System.Linq
 @using System.Net.Http.Json
+@using PiggyzenMvp.Blazor.DTOs
 @inject IHttpClientFactory HttpClientFactory
 
 <h2 class="mb-4">Kategorier</h2>
@@ -10,95 +12,114 @@
     <div class="alert alert-danger">@errorMessage</div>
 }
 
-@if (isBusy && nodes.Count == 0)
+@if (isBusy && groups.Count == 0)
 {
     <p><em>Laddar...</em></p>
 }
 else
 {
-    @foreach (var system in nodes)
+    @foreach (var group in groups)
     {
         <div class="mt-4">
-            <h3 class="fw-semibold">@system.Category.Name</h3>
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="fw-semibold mb-0">@group.DisplayName</h3>
+                @if (creatingGroupId != group.Id)
+                {
+                    <button class="btn btn-sm btn-outline-primary"
+                            @onclick="() => StartCreate(group.Id)">
+                        + Lägg till kategori
+                    </button>
+                }
+            </div>
 
-            @* Undercategories list *@
             <ul class="list-group list-group-flush mt-2">
-                @foreach (var child in system.Children)
+                @foreach (var category in group.Categories.OrderBy(c => c.SortOrder).ThenBy(c => c.DisplayName))
                 {
                     <li class="list-group-item px-0">
-
-                        @if (editingId == child.Category.Id)
+                        @if (editingCategoryId == category.Id)
                         {
                             <div class="border rounded p-3 shadow-sm bg-white">
-
-                                <div class="mb-2">
-                                    <label class="form-label">Namn</label>
-                                    <input class="form-control"
-                                           @bind="editModel.Name" />
-                                </div>
-
                                 <div class="mb-3">
-                                    <label class="form-label">Parentkategori</label>
-                                    <select class="form-select"
-                                            @bind="editModel.ParentCategoryIdString">
-                                        @foreach (var sys in nodes)
-                                        {
-                                            <option value="@sys.Category.Id">
-                                                @sys.Category.Name
-                                            </option>
-                                        }
-                                    </select>
+                                    <label class="form-label">
+                                        @(category.IsSystemCategory ? "Visningsnamn (lämna tomt för standard)" : "Namn")
+                                    </label>
+                                    <input class="form-control"
+                                           @bind="editModel.DisplayName" />
                                 </div>
-
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="hide-@category.Id"
+                                           @bind="editModel.IsHidden" />
+                                    <label class="form-check-label" for="hide-@category.Id">
+                                        Dölj kategori vid val
+                                    </label>
+                                </div>
                                 <div class="d-flex gap-2">
                                     <button class="btn btn-primary" disabled="@isBusy"
-                                            @onclick="() => SaveEditAsync(child.Category.Id)">
+                                            @onclick="() => SaveEditAsync(category.Id, category.IsSystemCategory)">
                                         Spara
                                     </button>
-                                    <button class="btn btn-secondary" disabled="@isBusy"
-                                            @onclick="CancelEdit">
+                                    <button class="btn btn-secondary" disabled="@isBusy" @onclick="CancelEdit">
                                         Avbryt
                                     </button>
-                                    <button class="btn btn-outline-danger ms-auto" disabled="@isBusy"
-                                            @onclick="() => DeleteCategoryAsync(child.Category.Id)">
-                                        Ta bort
-                                    </button>
+                                    @if (!category.IsSystemCategory)
+                                    {
+                                        <button class="btn btn-outline-danger ms-auto" disabled="@isBusy"
+                                                @onclick="() => DeleteCategoryAsync(category.Id)">
+                                            Ta bort
+                                        </button>
+                                    }
                                 </div>
                             </div>
                         }
                         else
                         {
-                            <div class="d-flex justify-content-between align-items-center py-1 category-row"
-                                 role="button"
-                                 @onclick="() => StartEdit(child.Category)">
-                                <span class="fs-6">@child.Category.Name</span>
+                            <div class="d-flex justify-content-between align-items-center py-1">
+                                <div>
+                                    <span class="fs-6">@category.EffectiveName</span>
+                                    @if (category.IsSystemCategory)
+                                    {
+                                        <span class="badge bg-light text-dark ms-2">System</span>
+                                    }
+                                    @if (category.IsHidden)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-2">Dold</span>
+                                    }
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-secondary"
+                                            @onclick="() => StartEdit(category)">
+                                        Redigera
+                                    </button>
+                                    @if (!category.IsSystemCategory)
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => DeleteCategoryAsync(category.Id)">
+                                            Ta bort
+                                        </button>
+                                    }
+                                </div>
                             </div>
                         }
-
                     </li>
                 }
 
-                @* Create new subcategory *@
-
                 <li class="list-group-item px-0">
-
-                    @if (creatingUnderParentId == system.Category.Id)
+                    @if (creatingGroupId == group.Id)
                     {
                         <div class="border rounded p-3 shadow-sm bg-white">
-
                             <div class="mb-3">
                                 <label class="form-label">Namn</label>
                                 <input class="form-control"
-                                       @bind="createModel.Name" />
+                                       @bind="createModel.DisplayName" />
                             </div>
-
                             <div class="d-flex gap-2">
                                 <button class="btn btn-primary" disabled="@isBusy"
-                                        @onclick="() => CreateSubCategoryAsync(system.Category.Id)">
+                                        @onclick="() => CreateCategoryAsync(group.Id)">
                                     Skapa
                                 </button>
-                                <button class="btn btn-secondary" disabled="@isBusy"
-                                        @onclick="CancelCreate">
+                                <button class="btn btn-secondary" disabled="@isBusy" @onclick="CancelCreate">
                                     Avbryt
                                 </button>
                             </div>
@@ -107,33 +128,23 @@ else
                     else
                     {
                         <button class="btn btn-sm btn-outline-primary mt-2"
-                                @onclick="() => StartCreate(system.Category.Id)">
-                            +
+                                @onclick="() => StartCreate(group.Id)">
+                            + Ny kategori
                         </button>
                     }
                 </li>
-
             </ul>
         </div>
     }
 }
 
-<style>
-    .category-row:hover {
-        background-color: #f8f9fa;
-        border-radius: 4px;
-        padding-left: 6px;
-        transition: background-color 0.15s ease;
-    }
-</style>
-
 @code {
-    private List<CategoryNode> nodes = new();
+    private List<CategoryGroupDto> groups = new();
     private bool isBusy;
     private string? errorMessage;
 
-    private int? editingId;
-    private int? creatingUnderParentId;
+    private int? editingCategoryId;
+    private int? creatingGroupId;
 
     private readonly CreateCategoryModel createModel = new();
     private readonly EditCategoryModel editModel = new();
@@ -147,21 +158,19 @@ else
         try
         {
             var client = HttpClientFactory.CreateClient("ApiClient");
-            var categories = await client.GetFromJsonAsync<List<CategoryDto>>("api/categories") ?? new();
-
-            // Build tree
-            var systemNodes = categories
-                .Where(c => c.IsSystemCategory)
-                .Select(c => new CategoryNode(c))
-                .ToList();
-
-            foreach (var child in categories.Where(c => !c.IsSystemCategory))
-            {
-                var parent = systemNodes.FirstOrDefault(s => s.Category.Id == child.ParentCategoryId);
-                parent?.Children.Add(new CategoryNode(child));
-            }
-
-            nodes = systemNodes.OrderBy(s => s.Category.Name).ToList();
+            var result = await client.GetFromJsonAsync<List<CategoryGroupDto>>("api/categories");
+            groups = result?
+                .OrderBy(g => g.SortOrder)
+                .Select(g =>
+                {
+                    g.Categories = g.Categories
+                        .Where(c => c.IsActive)
+                        .OrderBy(c => c.SortOrder)
+                        .ThenBy(c => c.DisplayName)
+                        .ToList();
+                    return g;
+                })
+                .ToList() ?? new List<CategoryGroupDto>();
         }
         catch (Exception ex)
         {
@@ -175,22 +184,21 @@ else
         }
     }
 
-    // CREATE
-    private void StartCreate(int parentId)
+    private void StartCreate(int groupId)
     {
-        creatingUnderParentId = parentId;
-        createModel.Name = "";
+        creatingGroupId = groupId;
+        createModel.DisplayName = "";
     }
 
     private void CancelCreate()
     {
-        creatingUnderParentId = null;
-        createModel.Name = "";
+        creatingGroupId = null;
+        createModel.DisplayName = "";
     }
 
-    private async Task CreateSubCategoryAsync(int parentId)
+    private async Task CreateCategoryAsync(int groupId)
     {
-        if (string.IsNullOrWhiteSpace(createModel.Name))
+        if (string.IsNullOrWhiteSpace(createModel.DisplayName))
         {
             errorMessage = "Ange ett namn.";
             return;
@@ -200,11 +208,10 @@ else
         {
             isBusy = true;
             var client = HttpClientFactory.CreateClient("ApiClient");
-
             var req = new CreateCategoryRequest
             {
-                Name = createModel.Name.Trim(),
-                ParentCategoryId = parentId
+                DisplayName = createModel.DisplayName.Trim(),
+                GroupId = groupId,
             };
 
             var resp = await client.PostAsJsonAsync("api/categories", req);
@@ -217,35 +224,33 @@ else
             CancelCreate();
             await LoadAsync();
         }
-        finally { isBusy = false; }
+        finally
+        {
+            isBusy = false;
+        }
     }
 
-    // EDIT
     private void StartEdit(CategoryDto category)
     {
-        editingId = category.Id;
-        editModel.Name = category.Name;
-        editModel.ParentCategoryIdString = category.ParentCategoryId?.ToString() ?? "";
+        editingCategoryId = category.Id;
+        editModel.DisplayName = category.IsSystemCategory
+            ? category.UserDisplayName ?? ""
+            : category.DisplayName;
+        editModel.IsHidden = category.IsHidden;
     }
 
     private void CancelEdit()
     {
-        editingId = null;
-        editModel.Name = "";
-        editModel.ParentCategoryIdString = "";
+        editingCategoryId = null;
+        editModel.DisplayName = "";
+        editModel.IsHidden = false;
     }
 
-    private async Task SaveEditAsync(int categoryId)
+    private async Task SaveEditAsync(int categoryId, bool isSystemCategory)
     {
-        if (string.IsNullOrWhiteSpace(editModel.Name))
+        if (!isSystemCategory && string.IsNullOrWhiteSpace(editModel.DisplayName))
         {
             errorMessage = "Ange ett namn.";
-            return;
-        }
-
-        if (!int.TryParse(editModel.ParentCategoryIdString, out var parentId))
-        {
-            errorMessage = "Välj en giltig parent.";
             return;
         }
 
@@ -256,8 +261,9 @@ else
 
             var req = new UpdateCategoryRequest
             {
-                Name = editModel.Name.Trim(),
-                ParentCategoryId = parentId
+                IsHidden = editModel.IsHidden,
+                DisplayName = !isSystemCategory ? editModel.DisplayName.Trim() : null,
+                UserDisplayName = isSystemCategory ? editModel.DisplayName : null,
             };
 
             var resp = await client.PutAsJsonAsync($"api/categories/{categoryId}", req);
@@ -270,19 +276,21 @@ else
             CancelEdit();
             await LoadAsync();
         }
-        finally { isBusy = false; }
+        finally
+        {
+            isBusy = false;
+        }
     }
 
-    // DELETE
     private async Task DeleteCategoryAsync(int id)
     {
-        if (!await Confirm($"Ta bort kategori?")) return;
+        if (!await Confirm("Ta bort kategori?"))
+            return;
 
         try
         {
             isBusy = true;
             var client = HttpClientFactory.CreateClient("ApiClient");
-
             var resp = await client.DeleteAsync($"api/categories/{id}");
             if (!resp.IsSuccessStatusCode)
             {
@@ -292,7 +300,10 @@ else
 
             await LoadAsync();
         }
-        finally { isBusy = false; }
+        finally
+        {
+            isBusy = false;
+        }
     }
 
     private Task<bool> Confirm(string text)
@@ -301,43 +312,27 @@ else
         return Task.FromResult(true);
     }
 
-    // MODELS
-
     private class CreateCategoryModel
     {
-        public string Name { get; set; } = "";
+        public string DisplayName { get; set; } = "";
     }
 
     private class EditCategoryModel
     {
-        public string Name { get; set; } = "";
-        public string ParentCategoryIdString { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public bool IsHidden { get; set; }
     }
 
-    private class CategoryNode
+    private class CreateCategoryRequest
     {
-        public CategoryDto Category { get; }
-        public List<CategoryNode> Children { get; } = new();
-        public CategoryNode(CategoryDto c) => Category = c;
+        public string DisplayName { get; set; } = "";
+        public int GroupId { get; set; }
     }
 
-    public class CategoryDto
+    private class UpdateCategoryRequest
     {
-        public int Id { get; set; }
-        public string Name { get; set; } = "";
-        public int? ParentCategoryId { get; set; }
-        public bool IsSystemCategory { get; set; }
-    }
-
-    public class CreateCategoryRequest
-    {
-        public string Name { get; set; } = "";
-        public int ParentCategoryId { get; set; }
-    }
-
-    public class UpdateCategoryRequest
-    {
-        public string Name { get; set; } = "";
-        public int ParentCategoryId { get; set; }
+        public string? DisplayName { get; set; }
+        public string? UserDisplayName { get; set; }
+        public bool? IsHidden { get; set; }
     }
 }

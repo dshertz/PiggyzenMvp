@@ -12,6 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<NormalizeService>();
 builder.Services.AddScoped<TransactionImportService>();
 builder.Services.AddScoped<CategorizationService>();
+builder.Services.AddScoped<CategorySlugService>();
+builder.Services.AddScoped<CategorySeeder>();
 builder.Services.AddDbContext<PiggyzenMvpContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Sqlite"))
 );
@@ -30,6 +32,12 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var seeder = scope.ServiceProvider.GetRequiredService<CategorySeeder>();
+    await seeder.SeedAsync();
+}
 
 if (app.Environment.IsDevelopment())
 {

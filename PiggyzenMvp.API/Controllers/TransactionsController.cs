@@ -32,7 +32,7 @@ public class TransactionsController : ControllerBase
     {
         var items = await _context
             .Transactions.Include(t => t.Category)
-            .ThenInclude(c => c.ParentCategory)
+            .ThenInclude(c => c.Group)
             .OrderByDescending(t => t.TransactionDate)
             .Select(t => new TransactionListDto
             {
@@ -44,25 +44,17 @@ public class TransactionsController : ControllerBase
                 Balance = t.Balance,
 
                 CategoryId = t.CategoryId,
-                CategoryName = t.Category != null ? t.Category.Name : null,
+                CategoryName = t.Category == null
+                    ? null
+                    : (t.Category.UserDisplayName ?? t.Category.DisplayName),
 
-                TypeId =
-                    t.Category == null
-                        ? null
-                        : (
-                            t.Category.IsSystemCategory
-                                ? t.Category.Id
-                                : t.Category.ParentCategoryId
-                        ),
+                TypeId = t.Category == null ? (int?)null : t.Category.GroupId,
 
-                TypeName =
-                    t.Category == null
-                        ? null
-                        : (
-                            t.Category.IsSystemCategory ? t.Category.Name
-                            : t.Category.ParentCategory != null ? t.Category.ParentCategory.Name
-                            : null
-                        ),
+                TypeName = t.Category == null
+                    ? null
+                    : (
+                        t.Category.Group != null ? t.Category.Group.DisplayName : null
+                    ),
             })
             .ToListAsync(ct);
 

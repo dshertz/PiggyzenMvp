@@ -2,6 +2,6 @@ namespace PiggyzenMvp.API.DTOs;
 
 public class CreateCategoryRequest
 {
-    public required string Name { get; set; }
-    public int? ParentCategoryId { get; set; }
+    public required string DisplayName { get; set; }
+    public int GroupId { get; set; }
 }
