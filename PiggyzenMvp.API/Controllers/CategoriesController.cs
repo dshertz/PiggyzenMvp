@@ -151,7 +151,13 @@ namespace PiggyzenMvp.API.Controllers
                 await _context.Transactions.AnyAsync(t => t.CategoryId == id, ct)
                 || await _context.CategorizationRules.AnyAsync(h => h.CategoryId == id, ct);
             if (inUse)
-                return BadRequest(new { Message = "Category in use." });
+                return BadRequest(
+                    new
+                    {
+                        Message =
+                            "Kategorin används av transaktioner eller regler. Flytta dessa poster till en annan kategori innan du försöker ta bort den.",
+                    }
+                );
 
             _context.Categories.Remove(c);
             await _context.SaveChangesAsync(ct);
