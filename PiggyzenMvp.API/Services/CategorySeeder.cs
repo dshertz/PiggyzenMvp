@@ -67,7 +67,7 @@ public class CategorySeeder
                     GroupId = seed.GroupId,
                     Key = seed.Key,
                     DisplayName = seed.DisplayName,
-                    UserDisplayName = null,
+                    UserDisplayName = seed.DefaultUserDisplayName,
                     SortOrder = seed.SortOrder,
                     IsSystemCategory = true,
                     IsActive = true,
@@ -85,6 +85,13 @@ public class CategorySeeder
                     category.IsActive = true;
                 if (category.IsHidden)
                     category.IsHidden = false;
+                if (
+                    string.IsNullOrWhiteSpace(category.UserDisplayName)
+                    && !string.IsNullOrWhiteSpace(seed.DefaultUserDisplayName)
+                )
+                {
+                    category.UserDisplayName = seed.DefaultUserDisplayName;
+                }
             }
         }
 
