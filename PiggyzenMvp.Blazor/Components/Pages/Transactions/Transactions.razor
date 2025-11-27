@@ -1,5 +1,6 @@
 @page "/transactions"
 @rendermode InteractiveServer
+@using System.Globalization
 @using System.Linq
 @using PiggyzenMvp.Blazor.DTOs
 @using PiggyzenMvp.Blazor.DTOs.Transactions
@@ -49,6 +50,102 @@
         <span class="badge bg-success">Kategoriserade: @CategorizedCount</span>
         <span class="badge bg-warning text-dark">Ej kategoriserade: @UncategorizedCount</span>
         <span class="badge bg-info text-dark">Totalt: @(transactions?.Count ?? 0)</span>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+            <div class="fw-semibold text-uppercase small text-muted">Datumfilter</div>
+            <div class="btn-group" role="group" aria-label="Datumläge">
+                <button type="button"
+                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.All ? "active" : "")"
+                        @onclick="() => SetDateFilterMode(DateFilterMode.All)">
+                    Alla
+                </button>
+                <button type="button"
+                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Yearly ? "active" : "")"
+                        @onclick="() => SetDateFilterMode(DateFilterMode.Yearly)">
+                    År
+                </button>
+                <button type="button"
+                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Monthly ? "active" : "")"
+                        @onclick="() => SetDateFilterMode(DateFilterMode.Monthly)">
+                    Månad
+                </button>
+            </div>
+
+            <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+                <div class="btn-group" role="group" aria-label="Periodnavigation">
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            disabled="@IsPeriodNavigationDisabled"
+                            @onclick="() => StepPeriod(-1)">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            disabled>
+                        @CurrentPeriodLabel
+                    </button>
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            disabled="@IsPeriodNavigationDisabled"
+                            @onclick="() => StepPeriod(1)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+                <button type="button"
+                        class="btn btn-outline-primary btn-sm"
+                        disabled="@IsDateControlsDisabled"
+                        @onclick="ToggleDateMultiSelect">
+                    @(isDateMultiSelect ? "Multi på" : "Multi av")
+                </button>
+                <button type="button"
+                        class="btn btn-link text-decoration-none"
+                        disabled="@IsDateControlsDisabled"
+                        @onclick="ClearDateFilters">
+                    Rensa filter
+                </button>
+            </div>
+        </div>
+
+        @if (dateFilterMode == DateFilterMode.All)
+        {
+            <div class="text-muted small">Alla datum visas.</div>
+        }
+        else if (dateFilterMode == DateFilterMode.Yearly)
+        {
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="text-muted text-uppercase small fw-semibold">År</span>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var year in YearOptionsDisplay)
+                    {
+                        <button type="button"
+                                class="@GetYearButtonClass(year)"
+                                @onclick="() => ToggleYearSelection(year)">
+                            @year
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+        else if (dateFilterMode == DateFilterMode.Monthly)
+        {
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="text-muted text-uppercase small fw-semibold">Period</span>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var option in MonthOptionsDisplay)
+                    {
+                        <button type="button"
+                                class="@GetMonthButtonClass(option)"
+                                @onclick="() => ToggleMonthSelection(option)">
+                            @GetMonthLabel(option)
+                        </button>
+                    }
+                </div>
+            </div>
+        }
     </div>
 </div>
 
@@ -154,6 +251,15 @@ else
     private string? filterCategory = null;
     private const string FilterStateKey = "transactions_filter_state";
     private bool filterStateLoaded;
+    private DateFilterMode dateFilterMode = DateFilterMode.Monthly;
+    private bool isDateMultiSelect;
+    private HashSet<int> selectedYears = new();
+    private HashSet<YearMonth> selectedYearMonths = new();
+    private int? activeYear;
+    private int? activeMonth;
+    private List<int> availableYears = new();
+    private List<YearMonth> availableYearMonths = new();
+    private static readonly CultureInfo SwedishCulture = CultureInfo.GetCultureInfo("sv-SE");
 
     // Filtrerad lista
     private List<TransactionDto> FilteredTransactions =>
@@ -162,7 +268,8 @@ else
                 (string.IsNullOrWhiteSpace(searchText) || tx.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
                 ((filterCategory ?? "all") == "all" ||
                  ((filterCategory ?? "all") == "categorized" && tx.CategoryId != null) ||
-                 ((filterCategory ?? "all") == "uncategorized" && tx.CategoryId == null))
+                 ((filterCategory ?? "all") == "uncategorized" && tx.CategoryId == null)) &&
+                MatchesDateFilter(tx)
             )
             .OrderByDescending(t => t.TransactionDate)
             .ToList()
@@ -184,6 +291,8 @@ else
                 LoadTransactionsAsync(client),
                 LoadCategoriesAsync(client)
             );
+
+            RefreshAvailablePeriods();
         }
         catch (Exception ex)
         {
@@ -438,6 +547,323 @@ else
         tx.TypeName = category.GroupDisplayName;
     }
 
+    private IEnumerable<int> YearOptionsDisplay => availableYears.OrderByDescending(y => y);
+    private IEnumerable<YearMonth> MonthOptionsDisplay =>
+        availableYearMonths.OrderByDescending(p => p.Year).ThenByDescending(p => p.Month);
+    private bool HasPeriodData => availableYearMonths.Count > 0;
+    private bool HasActiveSinglePeriod =>
+        dateFilterMode == DateFilterMode.Yearly
+            ? activeYear.HasValue
+            : dateFilterMode == DateFilterMode.Monthly
+                ? activeYear.HasValue && activeMonth.HasValue
+                : true;
+    private bool IsDateControlsDisabled => dateFilterMode == DateFilterMode.All || !HasPeriodData;
+    private bool IsPeriodNavigationDisabled =>
+        dateFilterMode == DateFilterMode.All || isDateMultiSelect || !HasActiveSinglePeriod;
+    private string CurrentPeriodLabel => dateFilterMode switch
+    {
+        DateFilterMode.All => "Alla datum",
+        DateFilterMode.Yearly => activeYear?.ToString() ?? "Välj år",
+        DateFilterMode.Monthly => activeYear.HasValue && activeMonth.HasValue
+            ? new DateTime(activeYear.Value, activeMonth.Value, 1).ToString("MMMM yyyy", SwedishCulture)
+            : "Välj månad",
+        _ => "Alla datum"
+    };
+
+    private void SetDateFilterMode(DateFilterMode mode)
+    {
+        if (dateFilterMode == mode)
+            return;
+
+        dateFilterMode = mode;
+        if (mode == DateFilterMode.All)
+        {
+            isDateMultiSelect = false;
+        }
+        else if (mode == DateFilterMode.Yearly)
+        {
+            activeMonth = null;
+        }
+
+        EnsurePeriodSelectionIsValid();
+        _ = SaveFilterStateAsync();
+    }
+
+    private void ToggleDateMultiSelect()
+    {
+        if (IsDateControlsDisabled)
+            return;
+
+        isDateMultiSelect = !isDateMultiSelect;
+        if (isDateMultiSelect)
+        {
+            SeedMultiSelectionFromActive();
+        }
+        else
+        {
+            if (dateFilterMode == DateFilterMode.Yearly)
+            {
+                if (selectedYears.Count > 0)
+                {
+                    activeYear = selectedYears.OrderByDescending(y => y).First();
+                }
+                selectedYears.Clear();
+            }
+            else if (dateFilterMode == DateFilterMode.Monthly)
+            {
+                if (selectedYearMonths.Count > 0)
+                {
+                    var latest = selectedYearMonths
+                        .OrderBy(p => p.Year)
+                        .ThenBy(p => p.Month)
+                        .Last();
+                    activeYear = latest.Year;
+                    activeMonth = latest.Month;
+                }
+                selectedYearMonths.Clear();
+            }
+        }
+
+        _ = SaveFilterStateAsync();
+    }
+
+    private void ToggleYearSelection(int year)
+    {
+        if (dateFilterMode != DateFilterMode.Yearly || !availableYears.Contains(year))
+            return;
+
+        if (isDateMultiSelect)
+        {
+            if (!selectedYears.Add(year))
+                selectedYears.Remove(year);
+        }
+        else
+        {
+            activeYear = year;
+        }
+
+        _ = SaveFilterStateAsync();
+    }
+
+    private void ToggleMonthSelection(YearMonth option)
+    {
+        if (dateFilterMode != DateFilterMode.Monthly || !availableYearMonths.Contains(option))
+            return;
+
+        if (isDateMultiSelect)
+        {
+            if (!selectedYearMonths.Add(option))
+                selectedYearMonths.Remove(option);
+        }
+        else
+        {
+            activeYear = option.Year;
+            activeMonth = option.Month;
+        }
+
+        _ = SaveFilterStateAsync();
+    }
+
+    private void StepPeriod(int direction)
+    {
+        if (IsPeriodNavigationDisabled)
+            return;
+
+        if (dateFilterMode == DateFilterMode.Yearly && activeYear.HasValue)
+        {
+            var currentIndex = availableYears.IndexOf(activeYear.Value);
+            var nextIndex = currentIndex + direction;
+            if (nextIndex >= 0 && nextIndex < availableYears.Count)
+            {
+                activeYear = availableYears[nextIndex];
+            }
+        }
+        else if (dateFilterMode == DateFilterMode.Monthly && activeYear.HasValue && activeMonth.HasValue)
+        {
+            var current = new YearMonth(activeYear.Value, activeMonth.Value);
+            var currentIndex = availableYearMonths.IndexOf(current);
+            var nextIndex = currentIndex + direction;
+            if (nextIndex >= 0 && nextIndex < availableYearMonths.Count)
+            {
+                var target = availableYearMonths[nextIndex];
+                activeYear = target.Year;
+                activeMonth = target.Month;
+            }
+        }
+
+        _ = SaveFilterStateAsync();
+    }
+
+    private void ClearDateFilters()
+    {
+        if (!HasPeriodData)
+            return;
+
+        dateFilterMode = DateFilterMode.Monthly;
+        isDateMultiSelect = false;
+        var latest = availableYearMonths.Last();
+        activeYear = latest.Year;
+        activeMonth = latest.Month;
+        selectedYears.Clear();
+        selectedYearMonths.Clear();
+        EnsurePeriodSelectionIsValid();
+
+        _ = SaveFilterStateAsync();
+    }
+
+    private string GetYearButtonClass(int year)
+    {
+        var isActive = isDateMultiSelect ? selectedYears.Contains(year) : activeYear == year;
+        return GetChipClass(isActive);
+    }
+
+    private string GetMonthButtonClass(YearMonth option)
+    {
+        var isActive = isDateMultiSelect
+            ? selectedYearMonths.Contains(option)
+            : activeYear == option.Year && activeMonth == option.Month;
+        return GetChipClass(isActive);
+    }
+
+    private static string GetChipClass(bool isActive) =>
+        isActive ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-secondary";
+
+    private static string GetMonthLabel(YearMonth option)
+    {
+        var date = new DateTime(option.Year, option.Month, 1);
+        var monthAbbreviation = date.ToString("MMM", SwedishCulture).TrimEnd('.');
+        return $"{date:yyyy} {monthAbbreviation.ToLower(SwedishCulture)}.";
+    }
+
+    private void RefreshAvailablePeriods()
+    {
+        if (transactions is null || transactions.Count == 0)
+        {
+            availableYears = new();
+            availableYearMonths = new();
+            activeYear = null;
+            activeMonth = null;
+            selectedYears.Clear();
+            selectedYearMonths.Clear();
+            dateFilterMode = DateFilterMode.All;
+            isDateMultiSelect = false;
+            return;
+        }
+
+        availableYears = transactions
+            .Select(t => t.TransactionDate.Year)
+            .Distinct()
+            .OrderBy(y => y)
+            .ToList();
+
+        availableYearMonths = transactions
+            .Select(t => new YearMonth(t.TransactionDate.Year, t.TransactionDate.Month))
+            .Distinct()
+            .OrderBy(p => p.Year)
+            .ThenBy(p => p.Month)
+            .ToList();
+
+        EnsurePeriodSelectionIsValid();
+    }
+
+    private void EnsurePeriodSelectionIsValid()
+    {
+        if (!HasPeriodData)
+            return;
+
+        var latest = availableYearMonths.Last();
+
+        if (!activeYear.HasValue || !availableYears.Contains(activeYear.Value))
+        {
+            activeYear = latest.Year;
+        }
+
+        if (dateFilterMode == DateFilterMode.Monthly)
+        {
+            var desired = activeYear.HasValue && activeMonth.HasValue
+                ? new YearMonth(activeYear.Value, activeMonth.Value)
+                : latest;
+
+            if (!availableYearMonths.Contains(desired))
+            {
+                var fallbacks = availableYearMonths.Where(p => p.Year == activeYear).ToList();
+                if (fallbacks.Count > 0)
+                {
+                    desired = fallbacks.Last();
+                }
+                else
+                {
+                    desired = latest;
+                }
+            }
+
+            activeYear = desired.Year;
+            activeMonth = desired.Month;
+        }
+        else if (dateFilterMode == DateFilterMode.Yearly)
+        {
+            activeMonth = null;
+        }
+
+        selectedYears.RemoveWhere(year => !availableYears.Contains(year));
+        selectedYearMonths.RemoveWhere(period => !availableYearMonths.Contains(period));
+
+        if (isDateMultiSelect)
+        {
+            if (dateFilterMode == DateFilterMode.Yearly && selectedYears.Count == 0 && activeYear.HasValue)
+            {
+                selectedYears.Add(activeYear.Value);
+            }
+            else if (dateFilterMode == DateFilterMode.Monthly &&
+                     selectedYearMonths.Count == 0 &&
+                     activeYear.HasValue &&
+                     activeMonth.HasValue)
+            {
+                selectedYearMonths.Add(new YearMonth(activeYear.Value, activeMonth.Value));
+            }
+        }
+    }
+
+    private void SeedMultiSelectionFromActive()
+    {
+        if (dateFilterMode == DateFilterMode.Yearly && activeYear.HasValue)
+        {
+            selectedYears.Add(activeYear.Value);
+        }
+        else if (dateFilterMode == DateFilterMode.Monthly && activeYear.HasValue && activeMonth.HasValue)
+        {
+            selectedYearMonths.Add(new YearMonth(activeYear.Value, activeMonth.Value));
+        }
+    }
+
+    private bool MatchesDateFilter(TransactionDto tx)
+    {
+        if (dateFilterMode == DateFilterMode.All)
+            return true;
+
+        var year = tx.TransactionDate.Year;
+        if (dateFilterMode == DateFilterMode.Yearly)
+        {
+            if (isDateMultiSelect)
+            {
+                return selectedYears.Count == 0 || selectedYears.Contains(year);
+            }
+
+            return !activeYear.HasValue || year == activeYear.Value;
+        }
+
+        var month = tx.TransactionDate.Month;
+        if (isDateMultiSelect)
+        {
+            return selectedYearMonths.Count == 0 || selectedYearMonths.Contains(new YearMonth(year, month));
+        }
+
+        if (!activeYear.HasValue || !activeMonth.HasValue)
+            return true;
+
+        return year == activeYear.Value && month == activeMonth.Value;
+    }
+
     private void SetFilterCategory(string category)
     {
         filterCategory = category;
@@ -450,11 +876,45 @@ else
         await SaveFilterStateAsync();
     }
 
+    private readonly record struct YearMonth(int Year, int Month)
+    {
+        public string ToStorageKey() => $"{Year:D4}-{Month:D2}";
+
+        public static bool TryParse(string? input, out YearMonth period)
+        {
+            period = default;
+            if (string.IsNullOrWhiteSpace(input))
+                return false;
+
+            var parts = input.Split('-', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2)
+                return false;
+
+            if (int.TryParse(parts[0], out var year) && int.TryParse(parts[1], out var month) && month is >= 1 and <= 12)
+            {
+                period = new YearMonth(year, month);
+                return true;
+            }
+
+            return false;
+        }
+    }
+
     private async Task LoadFilterStateAsync()
     {
         // 1) Läs från in-memory state (Blazor circuit). Ingen async/lagg.
         filterCategory = FilterState.FilterCategory;
         searchText = FilterState.SearchText;
+        dateFilterMode = FilterState.DateMode;
+        isDateMultiSelect = FilterState.IsDateMultiSelect;
+        activeYear = FilterState.ActiveYear;
+        activeMonth = FilterState.ActiveMonth;
+        selectedYears = new HashSet<int>(FilterState.SelectedYears ?? new List<int>());
+        selectedYearMonths = FilterState.SelectedYearMonths?
+            .Select(value => YearMonth.TryParse(value, out var period) ? period : (YearMonth?)null)
+            .Where(p => p.HasValue)
+            .Select(p => p.Value)
+            .ToHashSet() ?? new HashSet<YearMonth>();
 
         // 2) Hämta ev. persisted state (för browser refresh). Uppdatera både lokal state och container.
         try
@@ -464,8 +924,24 @@ else
             {
                 filterCategory = state.FilterCategory ?? filterCategory ?? "all";
                 searchText = state.SearchText ?? searchText ?? string.Empty;
+                dateFilterMode = state.DateMode;
+                isDateMultiSelect = state.IsDateMultiSelect;
+                activeYear = state.ActiveYear;
+                activeMonth = state.ActiveMonth;
+                selectedYears = state.SelectedYears?.ToHashSet() ?? selectedYears;
+                selectedYearMonths = state.SelectedYearMonths?
+                    .Select(value => YearMonth.TryParse(value, out var period) ? period : (YearMonth?)null)
+                    .Where(p => p.HasValue)
+                    .Select(p => p.Value)
+                    .ToHashSet() ?? selectedYearMonths;
                 FilterState.FilterCategory = filterCategory ?? "all";
                 FilterState.SearchText = searchText ?? string.Empty;
+                FilterState.DateMode = dateFilterMode;
+                FilterState.IsDateMultiSelect = isDateMultiSelect;
+                FilterState.ActiveYear = activeYear;
+                FilterState.ActiveMonth = activeMonth;
+                FilterState.SelectedYears = selectedYears.ToList();
+                FilterState.SelectedYearMonths = selectedYearMonths.Select(p => p.ToStorageKey()).ToList();
                 FilterState.IsLoadedFromStorage = true;
             }
         }
@@ -479,11 +955,23 @@ else
     {
         FilterState.FilterCategory = filterCategory ?? "all";
         FilterState.SearchText = searchText ?? string.Empty;
+        FilterState.DateMode = dateFilterMode;
+        FilterState.IsDateMultiSelect = isDateMultiSelect;
+        FilterState.ActiveYear = activeYear;
+        FilterState.ActiveMonth = activeMonth;
+        FilterState.SelectedYears = selectedYears.ToList();
+        FilterState.SelectedYearMonths = selectedYearMonths.Select(p => p.ToStorageKey()).ToList();
 
         var state = new FilterStatePayload
         {
             SearchText = FilterState.SearchText,
             FilterCategory = FilterState.FilterCategory,
+            DateMode = FilterState.DateMode,
+            IsDateMultiSelect = FilterState.IsDateMultiSelect,
+            ActiveYear = FilterState.ActiveYear,
+            ActiveMonth = FilterState.ActiveMonth,
+            SelectedYears = FilterState.SelectedYears,
+            SelectedYearMonths = FilterState.SelectedYearMonths,
         };
         try
         {
@@ -518,6 +1006,7 @@ else
         {
             var client = HttpClientFactory.CreateClient("ApiClient");
             await LoadTransactionsAsync(client);
+            RefreshAvailablePeriods();
         }
         catch (Exception ex)
         {
@@ -530,5 +1019,11 @@ else
     {
         public string? SearchText { get; set; }
         public string? FilterCategory { get; set; }
+        public DateFilterMode DateMode { get; set; } = DateFilterMode.Monthly;
+        public bool IsDateMultiSelect { get; set; }
+        public int? ActiveYear { get; set; }
+        public int? ActiveMonth { get; set; }
+        public List<int>? SelectedYears { get; set; }
+        public List<string>? SelectedYearMonths { get; set; }
     }
 }
