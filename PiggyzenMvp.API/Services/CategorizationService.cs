@@ -46,9 +46,6 @@ namespace PiggyzenMvp.API.Services
             if (t == null)
                 return new ManualCategorizationResult("Transaction not found.", 0);
 
-            if (t.CategoryId != null)
-                return new ManualCategorizationResult("Transaction is already categorized.", 0);
-
             var category = await _context
                 .Categories.Include(c => c.Group)
                 .FirstOrDefaultAsync(c => c.Id == categoryId, ct);
@@ -58,6 +55,18 @@ namespace PiggyzenMvp.API.Services
             var signError = ValidateAmountSign(t.Amount, category);
             if (signError != null)
                 return new ManualCategorizationResult(signError, 0);
+
+            if (t.CategoryId != null)
+            {
+                if (t.CategoryId == categoryId)
+                    return new ManualCategorizationResult(null, 0);
+
+                var changeError = await ChangeCategoryAsync(t.Id, categoryId, ct);
+                if (changeError != null)
+                    return new ManualCategorizationResult(changeError, 0);
+
+                return new ManualCategorizationResult(null, 0);
+            }
 
             var norm = t.NormalizedDescription;
             var isPos = t.Amount >= 0m;
