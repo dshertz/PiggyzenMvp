@@ -1,45 +1,29 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">PiggyzenMvp.Blazor</a>
+﻿<nav class="app-nav px-3">
+    <div class="nav-bar">
+        <div class="nav-brand-block">
+            <a class="navbar-brand" href="">Piggyzen</a>
+            <div class="nav-meta text-white-50">Budget &amp; kategorisering</div>
+        </div>
+        <input id="main-nav-toggle"
+               type="checkbox"
+               title="Navigation menu"
+               class="navbar-toggler" />
+        <div class="nav-links" onclick="document.getElementById('main-nav-toggle').checked = false;">
+            <div class="nav-item px-2">
+                <NavLink class="nav-link" href="/transactions" Match="NavLinkMatch.All">
+                    <span class="bi bi-credit-card-fill-nav-menu" aria-hidden="true"></span> Transaktioner
+                </NavLink>
+            </div>
+            <div class="nav-item px-2">
+                <NavLink class="nav-link" href="/Import" Match="NavLinkMatch.All">
+                    <span class="bi bi-file-earmark-arrow-up-fill-nav-menu" aria-hidden="true"></span> Import
+                </NavLink>
+            </div>
+            <div class="nav-item px-2">
+                <NavLink class="nav-link" href="/categories" Match="NavLinkMatch.All">
+                    <span class="bi bi-file-earmark-arrow-up-fill-nav-menu" aria-hidden="true"></span> Categories
+                </NavLink>
+            </div>
+        </div>
     </div>
-</div>
-
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/transactions" Match="NavLinkMatch.All">
-                <span class="bi bi-credit-card-fill-nav-menu" aria-hidden="true"></span> Transaktioner
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/Import" Match="NavLinkMatch.All">
-                <span class="bi bi-file-earmark-arrow-up-fill-nav-menu" aria-hidden="true"></span> Import
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/categories" Match="NavLinkMatch.All">
-                <span class="bi bi-file-earmark-arrow-up-fill-nav-menu" aria-hidden="true"></span> Categories
-            </NavLink>
-        </div>
-
-       @*  <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div> *@
-    </nav>
-</div>
-
+</nav>

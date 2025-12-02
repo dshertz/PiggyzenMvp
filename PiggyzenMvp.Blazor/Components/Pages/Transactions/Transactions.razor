@@ -9,10 +9,20 @@
 @inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedLocalStorage BrowserStorage
 @inject TransactionFilterState FilterState
 
-<h2>Transaktioner</h2>
-
-<div class="mb-4 d-flex flex-wrap align-items-end gap-3">
+<div class="transactions-header d-flex flex-column flex-lg-row align-items-lg-center gap-3 mb-4">
     <div>
+        <h2 class="mb-1">Transaktioner</h2>
+        <p class="text-muted mb-0">Håll koll på varje rörelse och kategorisera snabbare.</p>
+    </div>
+    <div class="transactions-stats ms-lg-auto d-flex flex-wrap gap-2">
+        <span class="badge bg-success">Kategoriserade: @CategorizedCount</span>
+        <span class="badge bg-warning text-dark">Ej kategoriserade: @UncategorizedCount</span>
+        <span class="badge bg-info text-dark">Totalt: @(transactions?.Count ?? 0)</span>
+    </div>
+</div>
+
+<div class="transactions-filter-bar card mb-3">
+    <div class="filter-field">
         <label for="search" class="form-label mb-1">Sök</label>
         <div class="input-group">
             <InputText id="search"
@@ -26,225 +36,320 @@
             </span>
         </div>
     </div>
-    <div>
-        <label class="form-label mb-1">Filtrera</label>
-        <div class="btn-group" role="group" aria-label="Filter">
+    <div class="filter-field">
+        <label class="form-label mb-1">Status</label>
+        <div class="btn-group w-100" role="group" aria-label="Filter">
             <button type="button"
-                    class="btn btn-outline-primary @(filterStateLoaded && filterCategory == "all" ? "active" : "")"
+                    class="btn btn-outline-primary flex-fill @(filterStateLoaded && filterCategory == "all" ? "active" : "")"
                     @onclick='() => SetFilterCategory("all")'>
                 Alla
             </button>
             <button type="button"
-                    class="btn btn-outline-success @(filterStateLoaded && filterCategory == "categorized" ? "active" : "")"
+                    class="btn btn-outline-success flex-fill @(filterStateLoaded && filterCategory == "categorized" ? "active" : "")"
                     @onclick='() => SetFilterCategory("categorized")'>
                 Kategoriserade
             </button>
             <button type="button"
-                    class="btn btn-outline-warning @(filterStateLoaded && filterCategory == "uncategorized" ? "active" : "")"
+                    class="btn btn-outline-warning flex-fill @(filterStateLoaded && filterCategory == "uncategorized" ? "active" : "")"
                     @onclick='() => SetFilterCategory("uncategorized")'>
                 Ej kategoriserade
             </button>
         </div>
     </div>
-    <div class="ms-auto d-flex gap-2 align-items-center">
-        <span class="badge bg-success">Kategoriserade: @CategorizedCount</span>
-        <span class="badge bg-warning text-dark">Ej kategoriserade: @UncategorizedCount</span>
-        <span class="badge bg-info text-dark">Totalt: @(transactions?.Count ?? 0)</span>
-    </div>
-</div>
-
-<div class="card mb-4">
-    <div class="card-body">
-        <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
-            <div class="fw-semibold text-uppercase small text-muted">Datumfilter</div>
-            <div class="btn-group" role="group" aria-label="Datumläge">
+    <div class="filter-field">
+        <label class="form-label mb-1">Period</label>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="btn-group period-nav" role="group" aria-label="Periodnavigation">
                 <button type="button"
-                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.All ? "active" : "")"
-                        @onclick="() => SetDateFilterMode(DateFilterMode.All)">
-                    Alla
+                        class="btn btn-outline-secondary"
+                        disabled="@IsPeriodNavigationDisabled"
+                        @onclick="() => StepPeriod(-1)">
+                    <i class="bi bi-chevron-left"></i>
                 </button>
                 <button type="button"
-                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Yearly ? "active" : "")"
-                        @onclick="() => SetDateFilterMode(DateFilterMode.Yearly)">
-                    År
+                        class="btn btn-outline-secondary period-label"
+                        disabled="@(!HasPeriodData)"
+                        @onclick="ToggleDatePanelVisibility">
+                    @CurrentPeriodLabel
                 </button>
                 <button type="button"
-                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Monthly ? "active" : "")"
-                        @onclick="() => SetDateFilterMode(DateFilterMode.Monthly)">
-                    Månad
+                        class="btn btn-outline-secondary"
+                        disabled="@IsPeriodNavigationDisabled"
+                        @onclick="() => StepPeriod(1)">
+                    <i class="bi bi-chevron-right"></i>
                 </button>
             </div>
-
-            <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
-                <div class="btn-group" role="group" aria-label="Periodnavigation">
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            disabled="@IsPeriodNavigationDisabled"
-                            @onclick="() => StepPeriod(-1)">
-                        <i class="bi bi-chevron-left"></i>
-                    </button>
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            disabled>
-                        @CurrentPeriodLabel
-                    </button>
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            disabled="@IsPeriodNavigationDisabled"
-                            @onclick="() => StepPeriod(1)">
-                        <i class="bi bi-chevron-right"></i>
-                    </button>
-                </div>
-                <button type="button"
-                        class="btn btn-outline-primary btn-sm"
-                        disabled="@IsDateControlsDisabled"
-                        @onclick="ToggleDateMultiSelect">
-                    @(isDateMultiSelect ? "Multi på" : "Multi av")
-                </button>
-                <button type="button"
-                        class="btn btn-link text-decoration-none"
-                        disabled="@IsDateControlsDisabled"
-                        @onclick="ClearDateFilters">
-                    Rensa filter
-                </button>
-            </div>
-        </div>
-
-        @if (dateFilterMode == DateFilterMode.All)
-        {
-            <div class="text-muted small">Alla datum visas.</div>
-        }
-        else if (dateFilterMode == DateFilterMode.Yearly)
-        {
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <span class="text-muted text-uppercase small fw-semibold">År</span>
-                <div class="d-flex flex-wrap gap-2">
-                    @foreach (var year in YearOptionsDisplay)
-                    {
-                        <button type="button"
-                                class="@GetYearButtonClass(year)"
-                                @onclick="() => ToggleYearSelection(year)">
-                            @year
-                        </button>
-                    }
-                </div>
-            </div>
-        }
-        else if (dateFilterMode == DateFilterMode.Monthly)
-        {
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <span class="text-muted text-uppercase small fw-semibold">Period</span>
-                <div class="d-flex flex-wrap gap-2">
-                    @foreach (var option in MonthOptionsDisplay)
-                    {
-                        <button type="button"
-                                class="@GetMonthButtonClass(option)"
-                                @onclick="() => ToggleMonthSelection(option)">
-                            @GetMonthLabel(option)
-                        </button>
-                    }
-                </div>
-            </div>
-        }
-    </div>
-</div>
-
-@if (!string.IsNullOrWhiteSpace(errorMessage))
-{
-    <div class="alert alert-danger" role="alert">@errorMessage</div>
-}
-
-@if (!string.IsNullOrWhiteSpace(successMessage))
-{
-    <div class="alert alert-success" role="alert">@successMessage</div>
-}
-
-@if (selectedTransactionIds.Count > 0)
-{
-    <div class="alert alert-info d-flex flex-column flex-md-row align-items-md-end gap-3" role="alert">
-        <div>
-            <strong>@selectedTransactionIds.Count</strong> transaktion(er) markerade.
-        </div>
-        <div class="flex-grow-1">
-            <label class="form-label mb-1">Välj kategori</label>
-            <select class="form-select form-select-sm"
-                    value="@GetSelectedBulkCategoryValue()"
-                    @onchange="OnBulkCategoryChanged">
-                <option value="">— Välj kategori —</option>
-                @foreach (var category in categories)
-                {
-                    <option value="@category.Id">@GetCategoryDisplayName(category)</option>
-                }
-            </select>
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-            <button class="btn btn-primary"
-                    @onclick="CategorizeSelectedAsync"
-                    disabled="@IsBulkActionDisabled">
-                @(isBulkCategorizing ? "Kategoriserar..." : $"Kategorisera {selectedTransactionIds.Count}")
+            <button type="button"
+                    class="btn btn-outline-primary btn-sm"
+                    disabled="@IsDateControlsDisabled"
+                    @onclick="ToggleDateMultiSelect">
+                @(isDateMultiSelect ? "Multi på" : "Multi av")
             </button>
-            <button class="btn btn-link text-decoration-none" type="button" @onclick="ClearSelection">Rensa markering</button>
+        </div>
+    </div>
+    <div class="filter-field filter-actions">
+        <label class="form-label mb-1">&nbsp;</label>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button"
+                    class="btn btn-link text-decoration-none px-0"
+                    disabled="@IsDateControlsDisabled"
+                    @onclick="ClearDateFilters">
+                Rensa datum
+            </button>
+            <button type="button"
+                    class="btn btn-outline-light panel-toggle-btn"
+                    @onclick="ToggleSidePanel">
+                @(isSidePanelOpen ? "Dölj panel" : "Visa panel")
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (isDatePanelExpanded && HasPeriodData)
+{
+    <div class="card date-filter-panel mb-4">
+        <div class="card-body">
+            <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+                <div class="fw-semibold text-uppercase small text-muted">Datumfilter</div>
+                <div class="btn-group" role="group" aria-label="Datumläge">
+                    <button type="button"
+                            class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.All ? "active" : "")"
+                            @onclick="() => SetDateFilterMode(DateFilterMode.All)">
+                        Alla
+                    </button>
+                    <button type="button"
+                            class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Yearly ? "active" : "")"
+                            @onclick="() => SetDateFilterMode(DateFilterMode.Yearly)">
+                        År
+                    </button>
+                    <button type="button"
+                            class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Monthly ? "active" : "")"
+                            @onclick="() => SetDateFilterMode(DateFilterMode.Monthly)">
+                        Månad
+                    </button>
+                </div>
+            </div>
+
+            @if (dateFilterMode == DateFilterMode.All)
+            {
+                <div class="text-muted small">Alla datum visas.</div>
+            }
+            else if (dateFilterMode == DateFilterMode.Yearly)
+            {
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span class="text-muted text-uppercase small fw-semibold">År</span>
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var year in YearOptionsDisplay)
+                        {
+                            <button type="button"
+                                    class="@GetYearButtonClass(year)"
+                                    @onclick="() => ToggleYearSelection(year)">
+                                @year
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+            else if (dateFilterMode == DateFilterMode.Monthly)
+            {
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span class="text-muted text-uppercase small fw-semibold">Period</span>
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var option in MonthOptionsDisplay)
+                        {
+                            <button type="button"
+                                    class="@GetMonthButtonClass(option)"
+                                    @onclick="() => ToggleMonthSelection(option)">
+                                @GetMonthLabel(option)
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
         </div>
     </div>
 }
 
-@if (transactions is null)
-{
-    <p><em>Laddar...</em></p>
-}
-else if (FilteredTransactions.Count == 0)
-{
-    <p>Inga transaktioner hittades.</p>
-}
-else
-{
-    <table class="table table-bordered table-striped">
-        <thead>
-            <tr>
-                <th style="width: 48px;">
-                    <input type="checkbox"
-                           class="form-check-input"
-                           @onchange="ToggleSelectAllFiltered"
-                           checked="@AreAllFilteredSelected" />
-                </th>
-                <th>Datum</th>
-                <th>Beskrivning</th>
-                <th>Belopp</th>
-                <th>Saldo</th>
-                <th>Type</th>
-                <th>Category</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var tx in FilteredTransactions)
-            {
-                <tr @key="tx.Id">
-                    <td class="text-center">
-                        <input type="checkbox"
-                               class="form-check-input"
-                               checked="@IsSelected(tx.Id)"
-                               @onchange="e => ToggleSelection(tx.Id, e)" />
-                    </td>
-                    <td>@tx.TransactionDate.ToShortDateString()</td>
-                    <td>@tx.Description</td>
-                    <td>@tx.Amount.ToString("F2")</td>
-                    <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
-                    <td>@(tx.TypeName ?? "—")</td>
-                    <td>@(tx.CategoryName ?? "Ej vald")</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
+<div class="transactions-workspace d-flex flex-column flex-xl-row gap-4">
+    <div class="transactions-main flex-fill">
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="alert alert-success" role="alert">@successMessage</div>
+        }
+
+        @if (transactions is null)
+        {
+            <p><em>Laddar...</em></p>
+        }
+        else if (FilteredTransactions.Count == 0)
+        {
+            <p>Inga transaktioner hittades.</p>
+        }
+        else
+        {
+            <div class="card transactions-table-card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 48px;">
+                                        <input type="checkbox"
+                                               class="form-check-input"
+                                               @onchange="ToggleSelectAllFiltered"
+                                               checked="@AreAllFilteredSelected" />
+                                    </th>
+                                    <th>Datum</th>
+                                    <th>Beskrivning</th>
+                                    <th>Belopp</th>
+                                    <th>Saldo</th>
+                                    <th>Type</th>
+                                    <th>Category</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var tx in FilteredTransactions)
+                                {
+                                    <tr @key="tx.Id">
+                                        <td class="text-center">
+                                            <input type="checkbox"
+                                                   class="form-check-input"
+                                                   checked="@IsSelected(tx.Id)"
+                                                   @onchange="e => ToggleSelection(tx.Id, e)" />
+                                        </td>
+                                        <td>@tx.TransactionDate.ToShortDateString()</td>
+                                        <td>@tx.Description</td>
+                                        <td>@tx.Amount.ToString("F2")</td>
+                                        <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
+                                        <td>@(tx.TypeName ?? "—")</td>
+                                        <td>@(tx.CategoryName ?? "Ej vald")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <aside class="transactions-side-panel @(isSidePanelOpen ? "open" : "collapsed")">
+        <div class="side-panel__inner">
+            <button type="button"
+                    class="side-panel__close btn btn-link text-decoration-none"
+                    @onclick="ToggleSidePanel">
+                Stäng panel
+            </button>
+            <div class="side-panel__section">
+                <div class="side-panel__title">Markerade transaktioner</div>
+                @if (selectedTransactionIds.Count > 0)
+                {
+                    <div class="selection-card">
+                        <div class="selection-card__count">
+                            <strong>@selectedTransactionIds.Count</strong> markerade.
+                        </div>
+                        <div class="selection-card__category">
+                            <div class="text-uppercase small text-muted">Vald kategori</div>
+                            <div class="selected-category-pill">@GetBulkCategoryName()</div>
+                            <button class="btn btn-link text-decoration-none btn-sm px-0"
+                                    type="button"
+                                    @onclick="ClearBulkCategorySelection"
+                                    disabled="@(bulkCategoryId is null)">
+                                Rensa kategori
+                            </button>
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                            <button class="btn btn-primary w-100"
+                                    @onclick="CategorizeSelectedAsync"
+                                    disabled="@IsBulkActionDisabled">
+                                @(isBulkCategorizing ? "Kategoriserar..." : $"Kategorisera {selectedTransactionIds.Count}")
+                            </button>
+                            <button class="btn btn-link text-decoration-none px-0"
+                                    type="button"
+                                    @onclick="ClearSelection">
+                                Rensa markering
+                            </button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted small mb-0">Markera transaktioner i tabellen för att börja kategorisera.</p>
+                }
+            </div>
+
+            <div class="side-panel__section">
+                <div class="side-panel__title">Kategorisering</div>
+                <div class="category-active mb-3">
+                    <div>
+                        <div class="text-uppercase small text-muted">Aktiv kategori</div>
+                        <div class="fw-semibold">@GetBulkCategoryName()</div>
+                    </div>
+                </div>
+                <div class="category-compact">
+                    <div class="category-compact__column">
+                        <div class="category-compact__list">
+                            @if (CategoryGroupsDisplay.Any())
+                            {
+                                @foreach (var group in CategoryGroupsDisplay)
+                                {
+                                    <button type="button"
+                                            class="@GetGroupButtonClass(group.Id)"
+                                            @onclick="() => SelectCategoryGroup(group.Id)">
+                                        <span>@group.DisplayName</span>
+                                        <span class="category-row__chevron"></span>
+                                    </button>
+                                }
+                            }
+                            else
+                            {
+                                <div class="text-muted small p-2">Inga grupper att visa.</div>
+                            }
+                        </div>
+                    </div>
+                    <div class="category-compact__column">
+                        <div class="category-compact__list category-compact__list--items">
+                            @if (VisibleCategories.Any())
+                            {
+                                @foreach (var category in VisibleCategories)
+                                {
+                                    <button type="button"
+                                            class="@GetCategoryButtonClass(category.Id)"
+                                            @onclick="() => SelectBulkCategory(category.Id)">
+                                        <span>@category.EffectiveName</span>
+                                    </button>
+                                }
+                            }
+                            else
+                            {
+                                <div class="text-muted small p-2">Inga kategorier för vald grupp.</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+</div>
+
 
 @code {
     private List<TransactionDto>? transactions;
     private List<CategoryDto> categories = new();
+    private List<CategoryGroupDto> categoryGroups = new();
     private HashSet<int> selectedTransactionIds = new();
     private int? bulkCategoryId;
     private bool isBulkCategorizing;
     private string? errorMessage;
     private string? successMessage;
+    private int? selectedCategoryGroupId;
+    private bool isDatePanelExpanded;
+    private bool isSidePanelOpen = true;
 
     // Filter state
     private string searchText = "";
@@ -274,6 +379,19 @@ else
             .OrderByDescending(t => t.TransactionDate)
             .ToList()
         ?? new();
+
+    private IEnumerable<CategoryGroupDto> CategoryGroupsDisplay => categoryGroups;
+
+    private IEnumerable<CategoryDto> VisibleCategories =>
+        categories
+            .Where(c => selectedCategoryGroupId == null || c.GroupId == selectedCategoryGroupId)
+            .OrderBy(c => c.SortOrder)
+            .ThenBy(c => c.DisplayName);
+
+    private string GetBulkCategoryName() =>
+        bulkCategoryId is int id
+            ? categories.FirstOrDefault(c => c.Id == id)?.EffectiveName ?? "Ingen vald"
+            : "Ingen vald";
 
     // Status info
     private int CategorizedCount => transactions?.Count(tx => tx.CategoryId != null) ?? 0;
@@ -306,14 +424,6 @@ else
             filterStateLoaded = true;
         }
     }
-
-    private string GetCategoryDisplayName(CategoryDto category) =>
-        string.IsNullOrWhiteSpace(category.GroupDisplayName)
-            ? category.EffectiveName
-            : $"{category.GroupDisplayName} / {category.EffectiveName}";
-
-    private string GetSelectedBulkCategoryValue() =>
-        bulkCategoryId?.ToString() ?? string.Empty;
 
     private bool AreAllFilteredSelected
     {
@@ -359,20 +469,53 @@ else
         }
     }
 
-    private void OnBulkCategoryChanged(ChangeEventArgs e)
-    {
-        var rawValue = e.Value?.ToString();
-        if (string.IsNullOrWhiteSpace(rawValue))
-        {
-            bulkCategoryId = null;
-            return;
-        }
-
-        bulkCategoryId = int.TryParse(rawValue, out var value) ? value : null;
-    }
-
     private bool IsBulkActionDisabled =>
         isBulkCategorizing || bulkCategoryId is null || selectedTransactionIds.Count == 0;
+
+    private string GetGroupButtonClass(int groupId)
+    {
+        var isActive = selectedCategoryGroupId == groupId;
+        return isActive ? "category-row active" : "category-row";
+    }
+
+    private string GetCategoryButtonClass(int categoryId)
+    {
+        var isActive = bulkCategoryId == categoryId;
+        return isActive ? "category-row active" : "category-row";
+    }
+
+    private void SelectCategoryGroup(int groupId)
+    {
+        selectedCategoryGroupId = groupId;
+    }
+
+    private void SelectBulkCategory(int categoryId)
+    {
+        bulkCategoryId = categoryId;
+        var category = categories.FirstOrDefault(c => c.Id == categoryId);
+        if (category is not null)
+        {
+            selectedCategoryGroupId = category.GroupId;
+        }
+    }
+
+    private void ClearBulkCategorySelection()
+    {
+        bulkCategoryId = null;
+    }
+
+    private void ToggleSidePanel()
+    {
+        isSidePanelOpen = !isSidePanelOpen;
+    }
+
+    private void ToggleDatePanelVisibility()
+    {
+        if (!HasPeriodData)
+            return;
+
+        isDatePanelExpanded = !isDatePanelExpanded;
+    }
 
     private void ClearSelection()
     {
@@ -594,6 +737,7 @@ else
         if (IsDateControlsDisabled)
             return;
 
+        isDatePanelExpanded = true;
         isDateMultiSelect = !isDateMultiSelect;
         if (isDateMultiSelect)
         {
@@ -707,6 +851,7 @@ else
         selectedYears.Clear();
         selectedYearMonths.Clear();
         EnsurePeriodSelectionIsValid();
+        isDatePanelExpanded = false;
 
         _ = SaveFilterStateAsync();
     }
@@ -913,7 +1058,7 @@ else
         selectedYearMonths = FilterState.SelectedYearMonths?
             .Select(value => YearMonth.TryParse(value, out var period) ? period : (YearMonth?)null)
             .Where(p => p.HasValue)
-            .Select(p => p.Value)
+            .Select(p => p!.Value)
             .ToHashSet() ?? new HashSet<YearMonth>();
 
         // 2) Hämta ev. persisted state (för browser refresh). Uppdatera både lokal state och container.
@@ -932,7 +1077,7 @@ else
                 selectedYearMonths = state.SelectedYearMonths?
                     .Select(value => YearMonth.TryParse(value, out var period) ? period : (YearMonth?)null)
                     .Where(p => p.HasValue)
-                    .Select(p => p.Value)
+                    .Select(p => p!.Value)
                     .ToHashSet() ?? selectedYearMonths;
                 FilterState.FilterCategory = filterCategory ?? "all";
                 FilterState.SearchText = searchText ?? string.Empty;
@@ -991,13 +1136,31 @@ else
 
     private async Task LoadCategoriesAsync(HttpClient client)
     {
-        var data = await client.GetFromJsonAsync<List<CategoryGroupDto>>("api/categories");
-        categories = data?
+        var data = await client.GetFromJsonAsync<List<CategoryGroupDto>>("api/categories") ?? new();
+
+        categoryGroups = data
+            .Select(group =>
+            {
+                group.Categories = group.Categories
+                    .Where(c => c.IsActive && !c.IsHidden)
+                    .OrderBy(c => c.SortOrder)
+                    .ThenBy(c => c.DisplayName)
+                    .ToList();
+                return group;
+            })
+            .Where(group => group.Categories.Count > 0)
+            .OrderBy(g => g.SortOrder)
+            .ThenBy(g => g.DisplayName)
+            .ToList();
+
+        categories = categoryGroups
             .SelectMany(g => g.Categories)
-            .Where(c => c.IsActive && !c.IsHidden)
-            .OrderBy(c => c.GroupId)
-            .ThenBy(c => c.SortOrder)
-            .ToList() ?? new();
+            .ToList();
+
+        if (selectedCategoryGroupId is null || categoryGroups.All(g => g.Id != selectedCategoryGroupId))
+        {
+            selectedCategoryGroupId = categoryGroups.FirstOrDefault()?.Id;
+        }
     }
 
     private async Task RefreshTransactionsAsync()

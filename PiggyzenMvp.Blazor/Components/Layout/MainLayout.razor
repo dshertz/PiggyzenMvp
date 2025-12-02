@@ -2,28 +2,24 @@
 @inherits LayoutComponentBase
 
 <div class="page">
-    <div class="sidebar">
+    <header class="app-shell-header">
         <NavMenu />
-    </div>
+    </header>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
+    <main class="app-shell-content">
         <article class="content px-4">
-    <ErrorBoundary @ref="errorBoundary">
-        <ChildContent>
-            @Body
-        </ChildContent>
-        <ErrorContent>
-            <div class="alert alert-danger mt-4">
-                Ett oväntat fel inträffade. Försök att ladda om sidan.
-                <button class="btn btn-sm btn-light mt-2" @onclick="() => errorBoundary?.Recover()">Försök igen</button>
-            </div>
-        </ErrorContent>
-    </ErrorBoundary>
-</article>
+            <ErrorBoundary @ref="errorBoundary">
+                <ChildContent>
+                    @Body
+                </ChildContent>
+                <ErrorContent>
+                    <div class="alert alert-danger mt-4">
+                        Ett oväntat fel inträffade. Försök att ladda om sidan.
+                        <button class="btn btn-sm btn-light mt-2" @onclick="() => errorBoundary?.Recover()">Försök igen</button>
+                    </div>
+                </ErrorContent>
+            </ErrorBoundary>
+        </article>
     </main>
 </div>
 

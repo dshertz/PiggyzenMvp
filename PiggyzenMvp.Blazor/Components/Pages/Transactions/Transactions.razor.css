@@ -1,0 +1,226 @@
+.transactions-header {
+    padding: 1.25rem 1.5rem;
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 10px 30px rgba(5, 39, 103, 0.1);
+}
+
+.transactions-stats .badge {
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.transactions-filter-bar {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 10px 25px rgba(5, 39, 103, 0.08);
+    padding: 1rem 1.25rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.filter-field .btn-group .btn {
+    font-size: 0.85rem;
+}
+
+.period-nav .btn {
+    min-width: 2.5rem;
+}
+
+.period-label {
+    min-width: 130px;
+    font-weight: 600;
+}
+
+.panel-toggle-btn {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.panel-toggle-btn:hover {
+    color: #fff;
+    border-color: #fff;
+}
+
+.date-filter-panel {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 10px 25px rgba(5, 39, 103, 0.08);
+}
+
+.transactions-workspace {
+    align-items: flex-start;
+}
+
+.transactions-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.transactions-table-card {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 15px 35px rgba(5, 39, 103, 0.08);
+}
+
+.transactions-side-panel {
+    width: 340px;
+    min-width: 320px;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.transactions-side-panel .side-panel__inner {
+    background: white;
+    border-radius: 1rem;
+    border: 1px solid rgba(5, 39, 103, 0.08);
+    box-shadow: 0 15px 35px rgba(5, 39, 103, 0.08);
+    padding: 1.25rem;
+    position: sticky;
+    top: 1rem;
+}
+
+.transactions-side-panel.collapsed {
+    transform: translateX(105%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.side-panel__close {
+    margin-left: auto;
+    padding: 0;
+    color: #3a3a3a;
+    display: none;
+}
+
+.side-panel__section + .side-panel__section {
+    margin-top: 1.5rem;
+}
+
+.side-panel__title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+.selection-card {
+    background: #f5f7ff;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.selected-category-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    background: white;
+    border: 1px solid rgba(5, 39, 103, 0.2);
+    font-size: 0.9rem;
+}
+
+.category-active {
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background: #f5f7ff;
+}
+
+.category-compact {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.category-compact__column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.category-compact__list {
+    border: 1px solid #dfe3ec;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background: #fff;
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+}
+
+.category-compact__list--items {
+    max-height: calc(100vh - 260px);
+}
+
+.category-row {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid #eef1f7;
+    padding: 0.45rem 0.85rem;
+    background: transparent;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    color: #1f2940;
+}
+
+.category-row:last-child {
+    border-bottom: none;
+}
+
+.category-row:hover {
+    background: #f2f5ff;
+}
+
+.category-row.active {
+    background: #dfe9ff;
+    font-weight: 600;
+}
+
+.category-row__chevron {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    background: url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='%23626d87' d='M6.646 4.646a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L9.293 8 6.646 5.354a.5.5 0 0 1 0-.708'/%3e%3c/svg%3e\") no-repeat center/0.75rem;
+}
+
+@media (max-width: 1199.98px) {
+    .transactions-side-panel .side-panel__inner {
+        position: relative;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .transactions-header {
+        padding: 1rem;
+    }
+
+    .transactions-filter-bar {
+        grid-template-columns: 1fr;
+    }
+
+    .transactions-workspace {
+        flex-direction: column;
+    }
+
+    .transactions-side-panel {
+        position: fixed;
+        top: 4.5rem;
+        right: 0;
+        height: calc(100vh - 4.5rem);
+        width: 320px;
+        z-index: 20;
+    }
+
+    .transactions-side-panel .side-panel__inner {
+        height: 100%;
+        border-radius: 0;
+        overflow-y: auto;
+    }
+
+    .side-panel__close {
+        display: inline-flex;
+    }
+}
