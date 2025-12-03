@@ -13,8 +13,7 @@
     <div class="transactions-main flex-fill">
         <div class="filter-stack">
             <div class="transactions-filter-bar">
-                <div class="filter-field">
-                    <label for="search" class="form-label mb-1">Sök</label>
+                <div class="filter-field filter-search">
                     <div class="input-group compact-search">
                         <InputText id="search"
                                    class="form-control"
@@ -27,9 +26,8 @@
                         </span>
                     </div>
                 </div>
-                <div class="filter-field">
-                    <label class="form-label mb-1">Status</label>
-                    <div class="btn-group w-100" role="group" aria-label="Filter">
+                <div class="filter-field filter-status">
+                    <div class="btn-group w-100 filter-toggle" role="group" aria-label="Statusfilter">
                         <button type="button"
                                 class="btn btn-outline-primary flex-fill @(filterStateLoaded && filterCategory == "all" ? "active" : "")"
                                 @onclick='() => SetFilterCategory("all")'>
@@ -47,9 +45,8 @@
                         </button>
                     </div>
                 </div>
-                <div class="filter-field">
-                    <label class="form-label mb-1">Period</label>
-                    <div class="d-flex flex-wrap align-items-center gap-2">
+                <div class="filter-field filter-period">
+                    <div class="d-flex flex-wrap align-items-center gap-2 period-controls">
                         <div class="btn-group period-nav" role="group" aria-label="Periodnavigation">
                             <button type="button"
                                     class="btn btn-outline-secondary"
@@ -77,8 +74,26 @@
                         </button>
                     </div>
                 </div>
+                <div class="filter-field filter-date-mode">
+                    <div class="btn-group w-100 filter-toggle" role="group" aria-label="Datumläge">
+                        <button type="button"
+                                class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.All ? "active" : "")"
+                                @onclick="() => SetDateFilterMode(DateFilterMode.All)">
+                            Alla
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Yearly ? "active" : "")"
+                                @onclick="() => SetDateFilterMode(DateFilterMode.Yearly)">
+                            År
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Monthly ? "active" : "")"
+                                @onclick="() => SetDateFilterMode(DateFilterMode.Monthly)">
+                            Månad
+                        </button>
+                    </div>
+                </div>
                 <div class="filter-field filter-actions">
-                    <label class="form-label mb-1">&nbsp;</label>
                     <div class="d-flex flex-wrap gap-2">
                         <button type="button"
                                 class="btn btn-outline-secondary btn-sm"
@@ -99,27 +114,6 @@
             {
                 <div class="date-filter-panel">
                     <div class="card-body">
-                        <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
-                            <div class="fw-semibold text-uppercase small text-muted">Filter</div>
-                            <div class="btn-group" role="group" aria-label="Datumläge">
-                                <button type="button"
-                                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.All ? "active" : "")"
-                                        @onclick="() => SetDateFilterMode(DateFilterMode.All)">
-                                    Alla
-                                </button>
-                                <button type="button"
-                                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Yearly ? "active" : "")"
-                                        @onclick="() => SetDateFilterMode(DateFilterMode.Yearly)">
-                                    År
-                                </button>
-                                <button type="button"
-                                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Monthly ? "active" : "")"
-                                        @onclick="() => SetDateFilterMode(DateFilterMode.Monthly)">
-                                    Månad
-                                </button>
-                            </div>
-                        </div>
-
                         @if (dateFilterMode == DateFilterMode.All)
                         {
                             <div class="text-muted small">Alla datum visas.</div>

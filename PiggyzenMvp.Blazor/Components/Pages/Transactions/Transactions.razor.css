@@ -14,17 +14,48 @@
     border: none;
     border-radius: 0;
     box-shadow: none;
-    padding: 0.5rem 0;
+    padding: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 0.75rem;
     background: transparent;
     border-bottom: 1px solid #dfe3ec;
+    min-height: var(--app-header-height, 56px);
+    align-items: center;
+}
+
+.filter-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .filter-field .btn-group .btn {
     font-size: 0.82rem;
-    padding: 0.35rem 0.55rem;
+    padding: 0.35rem 0.75rem;
+}
+
+.filter-field.filter-actions {
+    justify-content: flex-end;
+}
+
+.filter-field.filter-actions .btn {
+    white-space: nowrap;
+}
+
+.filter-field.filter-search .input-group {
+    width: 100%;
+}
+
+.filter-toggle .btn {
+    flex: 1 1 auto;
+}
+
+.period-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
 }
 
 .period-nav .btn {
@@ -89,8 +120,8 @@
     box-shadow: none;
     padding: 0 0 0 1.25rem;
     position: sticky;
-    top: var(--app-header-height, 44px);
-    height: calc(100vh - var(--app-header-height, 44px));
+    top: var(--app-header-height, 56px);
+    height: calc(100vh - var(--app-header-height, 56px));
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -107,7 +138,7 @@
 
 .panel-floating-toggle {
     position: absolute;
-    top: calc(var(--app-header-height, 44px) + 0.5rem);
+    top: calc(var(--app-header-height, 56px) + 0.5rem);
     right: 0.5rem;
     z-index: 9;
 }
@@ -265,17 +296,18 @@
 
     .transactions-filter-bar {
         grid-template-columns: 1fr;
+        min-height: auto;
     }
 
     .transactions-workspace {
         flex-direction: column;
     }
 
-    .transactions-side-panel {
+.transactions-side-panel {
         position: fixed;
-        top: var(--app-header-height, 44px);
+        top: var(--app-header-height, 56px);
         right: 0;
-        height: calc(100vh - var(--app-header-height, 44px));
+        height: calc(100vh - var(--app-header-height, 56px));
         width: 320px;
         z-index: 20;
         background: white;
@@ -292,17 +324,28 @@
     .side-panel__close {
         display: inline-flex;
     }
+
+    .filter-field.filter-actions {
+        justify-content: flex-start;
+    }
 }
+
 .filter-stack {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     position: sticky;
-    top: var(--app-header-height, 44px);
+    top: var(--app-header-height, 56px);
     z-index: 8;
     background: #f4f6fb;
-    padding-block: 0.5rem 0.25rem;
+    padding-block: 0;
     border-bottom: 1px solid #dfe3ec;
+}
+
+@media (max-width: 767.98px) {
+    .period-controls {
+        flex-wrap: wrap;
+    }
 }
 
 .compact-search .form-control {
