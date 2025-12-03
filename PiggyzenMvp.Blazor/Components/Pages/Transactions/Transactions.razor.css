@@ -86,11 +86,16 @@
     box-shadow: 0 10px 25px rgba(5, 39, 103, 0.08);
     padding: 1rem;
     position: sticky;
-    top: 0;
-    height: calc(100vh - 1rem);
+    top: calc(var(--app-header-height, 72px) + 0.5rem);
+    height: calc(100vh - var(--app-header-height, 72px) - 0.5rem);
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+}
+
+body.nav-hidden .transactions-side-panel .side-panel__inner {
+    top: 0.5rem;
+    height: calc(100vh - 0.5rem);
 }
 
 .transactions-side-panel.collapsed {
@@ -295,7 +300,7 @@
     flex-direction: column;
     gap: 1rem;
     position: sticky;
-    top: 1rem;
+    top: calc(var(--app-header-height, 72px) + 0.5rem);
     z-index: 8;
     background: rgba(244, 246, 251, 0.85);
     backdrop-filter: blur(4px);
