@@ -11,23 +11,17 @@
     z-index: 10;
     background-image: linear-gradient(90deg, rgb(5, 39, 103) 0%, #3a0647 70%);
     border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    transition: transform 0.3s ease;
 }
 
 .app-shell-content {
     flex: 1;
-    padding-block: 1.5rem 2.5rem;
+    padding-block: 1.25rem 2rem;
+    padding-inline: 1rem;
 }
 
-@media (max-width: 640.98px) {
-    .app-shell-content {
-        padding-inline: 1rem;
-    }
-}
-
-@media (min-width: 641px) {
-    .app-shell-content {
-        padding-inline: 2.5rem;
-    }
+body.nav-hidden .app-shell-header {
+    transform: translateY(-100%);
 }
 
 #blazor-error-ui {
