@@ -12,7 +12,7 @@
 <div class="transactions-workspace d-flex flex-column flex-xl-row gap-4">
     <div class="transactions-main flex-fill">
         <div class="filter-stack">
-            <div class="transactions-filter-bar card mb-3">
+            <div class="transactions-filter-bar">
                 <div class="filter-field">
                     <label for="search" class="form-label mb-1">Sök</label>
                     <div class="input-group compact-search">
@@ -97,7 +97,7 @@
 
             @if (showAdvancedFilters && HasPeriodData)
             {
-                <div class="card date-filter-panel mb-4">
+                <div class="date-filter-panel">
                     <div class="card-body">
                         <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
                             <div class="fw-semibold text-uppercase small text-muted">Filter</div>
@@ -180,7 +180,7 @@
         }
         else
         {
-            <div class="card transactions-table-card">
+            <div class="transactions-table-card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped mb-0">
