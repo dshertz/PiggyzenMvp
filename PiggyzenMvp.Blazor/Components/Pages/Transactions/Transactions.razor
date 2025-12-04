@@ -153,70 +153,72 @@
                 </div>
             }
         </div>
-        @if (!string.IsNullOrWhiteSpace(errorMessage))
-        {
-            <div class="alert alert-danger" role="alert">@errorMessage</div>
-        }
+        <div class="transactions-content">
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-danger" role="alert">@errorMessage</div>
+            }
 
-        @if (!string.IsNullOrWhiteSpace(successMessage))
-        {
-            <div class="alert alert-success" role="alert">@successMessage</div>
-        }
+            @if (!string.IsNullOrWhiteSpace(successMessage))
+            {
+                <div class="alert alert-success" role="alert">@successMessage</div>
+            }
 
-        @if (transactions is null)
-        {
-            <p><em>Laddar...</em></p>
-        }
-        else if (FilteredTransactions.Count == 0)
-        {
-            <p>Inga transaktioner hittades.</p>
-        }
-        else
-        {
-            <div class="transactions-table-card">
-                <div class="card-body p-0">
-                    <div class="table-responsive transactions-table-scroll">
-                        <table class="table table-bordered table-striped mb-0">
-                            <thead>
-                                <tr>
-                                    <th style="width: 48px;">
-                                        <input type="checkbox"
-                                               class="form-check-input"
-                                               @onchange="ToggleSelectAllFiltered"
-                                               checked="@AreAllFilteredSelected" />
-                                    </th>
-                                    <th>Datum</th>
-                                    <th>Beskrivning</th>
-                                    <th>Belopp</th>
-                                    <th>Saldo</th>
-                                    <th>Type</th>
-                                    <th>Category</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var tx in FilteredTransactions)
-                                {
-                                    <tr @key="tx.Id">
-                                        <td class="text-center">
+            @if (transactions is null)
+            {
+                <p><em>Laddar...</em></p>
+            }
+            else if (FilteredTransactions.Count == 0)
+            {
+                <p>Inga transaktioner hittades.</p>
+            }
+            else
+            {
+                <div class="transactions-table-card">
+                    <div class="card-body p-0">
+                        <div class="table-responsive transactions-table-scroll">
+                            <table class="table table-bordered table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 48px;">
                                             <input type="checkbox"
                                                    class="form-check-input"
-                                                   checked="@IsSelected(tx.Id)"
-                                                   @onchange="e => ToggleSelection(tx.Id, e)" />
-                                        </td>
-                                        <td>@tx.TransactionDate.ToShortDateString()</td>
-                                        <td>@tx.Description</td>
-                                        <td>@tx.Amount.ToString("F2")</td>
-                                        <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
-                                        <td>@(tx.TypeName ?? "—")</td>
-                                        <td>@(tx.CategoryName ?? "Ej vald")</td>
+                                                   @onchange="ToggleSelectAllFiltered"
+                                                   checked="@AreAllFilteredSelected" />
+                                        </th>
+                                        <th>Datum</th>
+                                        <th>Beskrivning</th>
+                                        <th>Belopp</th>
+                                        <th>Saldo</th>
+                                        <th>Type</th>
+                                        <th>Category</th>
                                     </tr>
-                                }
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    @foreach (var tx in FilteredTransactions)
+                                    {
+                                        <tr @key="tx.Id">
+                                            <td class="text-center">
+                                                <input type="checkbox"
+                                                       class="form-check-input"
+                                                       checked="@IsSelected(tx.Id)"
+                                                       @onchange="e => ToggleSelection(tx.Id, e)" />
+                                            </td>
+                                            <td>@tx.TransactionDate.ToShortDateString()</td>
+                                            <td>@tx.Description</td>
+                                            <td>@tx.Amount.ToString("F2")</td>
+                                            <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
+                                            <td>@(tx.TypeName ?? "—")</td>
+                                            <td>@(tx.CategoryName ?? "Ej vald")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
-            </div>
-        }
+            }
+        </div>
     </div>
 
     <aside class="transactions-side-panel @(isSidePanelOpen ? "open" : "collapsed")">
