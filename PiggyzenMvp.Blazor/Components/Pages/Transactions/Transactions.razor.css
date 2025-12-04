@@ -164,6 +164,22 @@
     min-height: 0;
 }
 
+.transactions-table th,
+.transactions-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.transactions-table__select .form-check-input {
+    display: block;
+    margin: 0 auto;
+}
+
+.transactions-table__amount,
+.transactions-table__balance {
+    font-variant-numeric: tabular-nums;
+}
+
 .transactions-side-panel {
     width: 325px;
     min-width: 300px;

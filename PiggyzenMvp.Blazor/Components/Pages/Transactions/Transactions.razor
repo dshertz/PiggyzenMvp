@@ -179,10 +179,10 @@
                 <div class="transactions-table-card">
                     <div class="card-body p-0">
                         <div class="table-responsive transactions-table-scroll">
-                            <table class="table table-bordered table-striped mb-0">
+                            <table class="table table-bordered table-striped mb-0 transactions-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 48px;">
+                                        <th class="text-center" style="width: 48px;">
                                             <input type="checkbox"
                                                    class="form-check-input"
                                                    @onchange="ToggleSelectAllFiltered"
@@ -190,8 +190,8 @@
                                         </th>
                                         <th>Datum</th>
                                         <th>Beskrivning</th>
-                                        <th>Belopp</th>
-                                        <th>Saldo</th>
+                                        <th class="text-end transactions-table__amount">Belopp</th>
+                                        <th class="text-end transactions-table__balance">Saldo</th>
                                         <th>Type</th>
                                         <th>Category</th>
                                     </tr>
@@ -200,7 +200,7 @@
                                     @foreach (var tx in FilteredTransactions)
                                     {
                                         <tr @key="tx.Id">
-                                            <td class="text-center">
+                                            <td class="text-center transactions-table__select">
                                                 <input type="checkbox"
                                                        class="form-check-input"
                                                        checked="@IsSelected(tx.Id)"
@@ -208,8 +208,8 @@
                                             </td>
                                             <td>@tx.TransactionDate.ToShortDateString()</td>
                                             <td>@tx.Description</td>
-                                            <td>@tx.Amount.ToString("F2")</td>
-                                            <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
+                                            <td class="text-end transactions-table__amount">@tx.Amount.ToString("F2")</td>
+                                            <td class="text-end transactions-table__balance">@(tx.Balance?.ToString("F2") ?? "-")</td>
                                             <td>@(tx.TypeName ?? "—")</td>
                                             <td>@(tx.CategoryName ?? "Ej vald")</td>
                                         </tr>
