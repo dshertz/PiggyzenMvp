@@ -26,66 +26,68 @@
                         </span>
                     </div>
                 </div>
-                <div class="filter-field filter-status">
-                    <div class="btn-group w-100 filter-toggle" role="group" aria-label="Statusfilter">
-                        <button type="button"
-                                class="btn btn-outline-primary flex-fill @(filterStateLoaded && filterCategory == "all" ? "active" : "")"
-                                @onclick='() => SetFilterCategory("all")'>
-                            Alla
-                        </button>
-                        <button type="button"
-                                class="btn btn-outline-success flex-fill @(filterStateLoaded && filterCategory == "categorized" ? "active" : "")"
-                                @onclick='() => SetFilterCategory("categorized")'>
-                            Kategoriserade
-                        </button>
-                        <button type="button"
-                                class="btn btn-outline-warning flex-fill @(filterStateLoaded && filterCategory == "uncategorized" ? "active" : "")"
-                                @onclick='() => SetFilterCategory("uncategorized")'>
-                            Ej kategoriserade
-                        </button>
-                    </div>
-                </div>
-                <div class="filter-field filter-period">
-                    <div class="d-flex flex-wrap align-items-center gap-2 period-controls">
-                        <div class="btn-group period-nav" role="group" aria-label="Periodnavigation">
+                <div class="filter-field filter-right">
+                    <div class="filter-block filter-status">
+                        <div class="btn-group filter-toggle" role="group" aria-label="Statusfilter">
                             <button type="button"
-                                    class="btn btn-outline-secondary"
-                                    disabled="@IsPeriodNavigationDisabled"
-                                    @onclick="() => StepPeriod(-1)">
-                                <i class="bi bi-chevron-left"></i>
+                                    class="btn btn-outline-primary @(filterStateLoaded && filterCategory == "all" ? "active" : "")"
+                                    @onclick='() => SetFilterCategory("all")'>
+                                Alla
                             </button>
                             <button type="button"
-                                    class="btn btn-outline-secondary period-label @(showAdvancedFilters ? "active" : "")"
-                                    aria-pressed="@showAdvancedFilters"
-                                    @onclick="ToggleFilterPanel">
-                                @CurrentPeriodLabel
+                                    class="btn btn-outline-success @(filterStateLoaded && filterCategory == "categorized" ? "active" : "")"
+                                    @onclick='() => SetFilterCategory("categorized")'>
+                                Kategoriserade
                             </button>
                             <button type="button"
-                                    class="btn btn-outline-secondary"
-                                    disabled="@IsPeriodNavigationDisabled"
-                                    @onclick="() => StepPeriod(1)">
-                                <i class="bi bi-chevron-right"></i>
+                                    class="btn btn-outline-warning @(filterStateLoaded && filterCategory == "uncategorized" ? "active" : "")"
+                                    @onclick='() => SetFilterCategory("uncategorized")'>
+                                Ej kategoriserade
                             </button>
                         </div>
                     </div>
-                </div>
-                <div class="filter-field filter-date-mode">
-                    <div class="btn-group w-100 filter-toggle" role="group" aria-label="Datumläge">
-                        <button type="button"
-                                class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.All ? "active" : "")"
-                                @onclick="() => SetDateFilterMode(DateFilterMode.All)">
-                            Alla
-                        </button>
-                        <button type="button"
-                                class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Yearly ? "active" : "")"
-                                @onclick="() => SetDateFilterMode(DateFilterMode.Yearly)">
-                            År
-                        </button>
-                        <button type="button"
-                                class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Monthly ? "active" : "")"
-                                @onclick="() => SetDateFilterMode(DateFilterMode.Monthly)">
-                            Månad
-                        </button>
+                    <div class="filter-block filter-date-mode">
+                        <div class="btn-group filter-toggle" role="group" aria-label="Datumläge">
+                            <button type="button"
+                                    class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.All ? "active" : "")"
+                                    @onclick="() => SetDateFilterMode(DateFilterMode.All)">
+                                Alla datum
+                            </button>
+                            <button type="button"
+                                    class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Yearly ? "active" : "")"
+                                    @onclick="() => SetDateFilterMode(DateFilterMode.Yearly)">
+                                År
+                            </button>
+                            <button type="button"
+                                    class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Monthly ? "active" : "")"
+                                    @onclick="() => SetDateFilterMode(DateFilterMode.Monthly)">
+                                Månad
+                            </button>
+                        </div>
+                    </div>
+                    <div class="filter-block filter-period">
+                        <div class="period-controls">
+                            <div class="btn-group period-nav" role="group" aria-label="Periodnavigation">
+                                <button type="button"
+                                        class="btn btn-outline-secondary"
+                                        disabled="@IsPeriodNavigationDisabled"
+                                        @onclick="() => StepPeriod(-1)">
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+                                <button type="button"
+                                        class="btn btn-outline-secondary period-label @(showAdvancedFilters ? "active" : "")"
+                                        aria-pressed="@showAdvancedFilters"
+                                        @onclick="ToggleFilterPanel">
+                                    @CurrentPeriodLabel
+                                </button>
+                                <button type="button"
+                                        class="btn btn-outline-secondary"
+                                        disabled="@IsPeriodNavigationDisabled"
+                                        @onclick="() => StepPeriod(1)">
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

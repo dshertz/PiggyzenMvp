@@ -16,12 +16,12 @@
     box-shadow: none;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: minmax(220px, 1fr) auto;
     gap: 0.75rem;
     background: transparent;
     border-bottom: 1px solid #dfe3ec;
     min-height: var(--app-header-height, 56px);
-    align-items: center;
+    align-items: stretch;
 }
 
 .filter-field {
@@ -37,6 +37,32 @@
 
 .filter-field.filter-search .input-group {
     width: 100%;
+}
+
+.filter-field.filter-right {
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.filter-block {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+}
+
+.filter-block .filter-toggle {
+    display: inline-flex;
+    gap: 0.35rem;
+}
+
+.filter-block.filter-period {
+    justify-content: flex-end;
+}
+
+.filter-stack .btn {
+    white-space: nowrap;
 }
 
 .filter-toggle .btn {
@@ -330,6 +356,10 @@
     .transactions-filter-bar {
         grid-template-columns: 1fr;
         min-height: auto;
+    }
+
+    .filter-field.filter-right {
+        justify-content: flex-start;
     }
 
     .transactions-workspace {
