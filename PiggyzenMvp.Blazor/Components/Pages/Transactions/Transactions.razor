@@ -55,8 +55,9 @@
                                 <i class="bi bi-chevron-left"></i>
                             </button>
                             <button type="button"
-                                    class="btn btn-outline-secondary period-label"
-                                    disabled>
+                                    class="btn btn-outline-secondary period-label @(showAdvancedFilters ? "active" : "")"
+                                    aria-pressed="@showAdvancedFilters"
+                                    @onclick="ToggleFilterPanel">
                                 @CurrentPeriodLabel
                             </button>
                             <button type="button"
@@ -66,12 +67,6 @@
                                 <i class="bi bi-chevron-right"></i>
                             </button>
                         </div>
-                        <button type="button"
-                                class="btn btn-outline-primary btn-sm"
-                                disabled="@IsDateControlsDisabled"
-                                @onclick="ToggleDateMultiSelect">
-                            @(isDateMultiSelect ? "Multi på" : "Multi av")
-                        </button>
                     </div>
                 </div>
                 <div class="filter-field filter-date-mode">
@@ -93,27 +88,31 @@
                         </button>
                     </div>
                 </div>
-                <div class="filter-field filter-actions">
-                    <div class="d-flex flex-wrap gap-2">
-                        <button type="button"
-                                class="btn btn-outline-secondary btn-sm"
-                                @onclick="ToggleFilterPanel">
-                            @(showAdvancedFilters ? "Dölj filter" : "Visa filter")
-                        </button>
-                        <button type="button"
-                                class="btn btn-link text-decoration-none px-0"
-                                disabled="@IsDateControlsDisabled"
-                                @onclick="ClearDateFilters">
-                            Rensa datum
-                        </button>
-                    </div>
-                </div>
             </div>
 
             @if (showAdvancedFilters && HasPeriodData)
             {
                 <div class="date-filter-panel">
                     <div class="card-body">
+                        <div class="filter-panel-tools d-flex flex-wrap align-items-center gap-2 mb-3">
+                            <button type="button"
+                                    class="btn btn-outline-primary btn-sm"
+                                    disabled="@IsDateControlsDisabled"
+                                    @onclick="ToggleDateMultiSelect">
+                                @(isDateMultiSelect ? "Multi på" : "Multi av")
+                            </button>
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    @onclick="ToggleFilterPanel">
+                                Dölj filter
+                            </button>
+                            <button type="button"
+                                    class="btn btn-link text-decoration-none btn-sm px-0"
+                                    disabled="@IsDateControlsDisabled"
+                                    @onclick="ClearDateFilters">
+                                Rensa datum
+                            </button>
+                        </div>
                         @if (dateFilterMode == DateFilterMode.All)
                         {
                             <div class="text-muted small">Alla datum visas.</div>
@@ -176,7 +175,7 @@
         {
             <div class="transactions-table-card">
                 <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <div class="table-responsive transactions-table-scroll">
                         <table class="table table-bordered table-striped mb-0">
                             <thead>
                                 <tr>

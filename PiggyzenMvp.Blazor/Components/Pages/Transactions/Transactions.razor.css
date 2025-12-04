@@ -35,14 +35,6 @@
     padding: 0.35rem 0.75rem;
 }
 
-.filter-field.filter-actions {
-    justify-content: flex-end;
-}
-
-.filter-field.filter-actions .btn {
-    white-space: nowrap;
-}
-
 .filter-field.filter-search .input-group {
     width: 100%;
 }
@@ -65,6 +57,12 @@
 .period-label {
     min-width: 130px;
     font-weight: 600;
+    cursor: pointer;
+}
+
+.period-label.active {
+    border-color: #0d6efd;
+    color: #0d6efd;
 }
 
 .panel-toggle-btn {
@@ -85,6 +83,14 @@
     border-bottom: 1px solid #dfe3ec;
 }
 
+.filter-panel-tools .btn-link {
+    color: #0d6efd;
+}
+
+.filter-panel-tools .btn-link:hover {
+    color: #0a58ca;
+}
+
 .transactions-workspace {
     align-items: stretch;
     position: relative;
@@ -103,6 +109,11 @@
     border-radius: 0.35rem;
     box-shadow: none;
     background: white;
+}
+
+.transactions-table-scroll {
+    max-height: calc(100vh - var(--app-header-height, 56px) - 260px);
+    overflow-y: auto;
 }
 
 .transactions-side-panel {
@@ -303,7 +314,11 @@
         flex-direction: column;
     }
 
-.transactions-side-panel {
+    .transactions-table-scroll {
+        max-height: none;
+    }
+
+    .transactions-side-panel {
         position: fixed;
         top: var(--app-header-height, 56px);
         right: 0;
@@ -325,9 +340,6 @@
         display: inline-flex;
     }
 
-    .filter-field.filter-actions {
-        justify-content: flex-start;
-    }
 }
 
 .filter-stack {
