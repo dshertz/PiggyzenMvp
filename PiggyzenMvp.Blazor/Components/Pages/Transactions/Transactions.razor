@@ -136,7 +136,7 @@ else
 
     // Filter state
     private string searchText = "";
-    private string? filterCategory = null;
+    private string filterCategory = "all";
     private const string FilterStateKey = "transactions_filter_state";
     private bool filterStateLoaded;
     private DateFilterMode dateFilterMode = DateFilterMode.Monthly;
@@ -148,22 +148,30 @@ else
     private List<int> availableYears = new();
     private List<YearMonth> availableYearMonths = new();
     private static readonly CultureInfo SwedishCulture = CultureInfo.GetCultureInfo("sv-SE");
-    private string CurrentFilterCategory => filterCategory ?? "all";
+    private static readonly string[] FilterKeyOrder = new[] { "categorized", "uncategorized" };
+    private const string CategorizedFilterKey = "categorized";
+    private const string UncategorizedFilterKey = "uncategorized";
+    private string CurrentFilterCategory => filterCategory;
     private int TotalTransactions => transactions?.Count ?? 0;
 
     // Filtrerad lista
-    private List<TransactionDto> FilteredTransactions =>
-        transactions?
-            .Where(tx =>
-                (string.IsNullOrWhiteSpace(searchText) || tx.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
-                ((filterCategory ?? "all") == "all" ||
-                 ((filterCategory ?? "all") == "categorized" && tx.CategoryId != null) ||
-                 ((filterCategory ?? "all") == "uncategorized" && tx.CategoryId == null)) &&
-                MatchesDateFilter(tx)
-            )
-            .OrderByDescending(t => t.TransactionDate)
-            .ToList()
-        ?? new();
+    private List<TransactionDto> FilteredTransactions
+    {
+        get
+        {
+            var categoryFilters = ParseFilterSelection(filterCategory);
+
+            return transactions?
+                .Where(tx =>
+                    (string.IsNullOrWhiteSpace(searchText) ||
+                     tx.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
+                    MatchesCategoryFilters(tx, categoryFilters) &&
+                    MatchesDateFilter(tx))
+                .OrderByDescending(t => t.TransactionDate)
+                .ToList()
+                ?? new();
+        }
+    }
 
     // Status info
     private int CategorizedCount => transactions?.Count(tx => tx.CategoryId != null) ?? 0;
@@ -726,6 +734,35 @@ else
         }
     }
 
+    private static HashSet<string> ParseFilterSelection(string? value)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(value) || value.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            return set;
+        }
+
+        var parts = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var part in parts)
+        {
+            set.Add(part);
+        }
+
+        return set;
+    }
+
+    private static string NormalizeFilterCategory(string? value)
+    {
+        var parsed = ParseFilterSelection(value);
+        if (parsed.Count == 0)
+        {
+            return "all";
+        }
+
+        var ordered = FilterKeyOrder.Where(parsed.Contains);
+        return string.Join(',', ordered);
+    }
+
     private bool MatchesDateFilter(TransactionDto tx)
     {
         if (dateFilterMode == DateFilterMode.All)
@@ -754,9 +791,23 @@ else
         return year == activeYear.Value && month == activeMonth.Value;
     }
 
+    private static bool MatchesCategoryFilters(TransactionDto tx, HashSet<string> filters)
+    {
+        if (filters.Count == 0)
+        {
+            return true;
+        }
+
+        var isCategorized = tx.CategoryId != null;
+        var matchesCategorized = isCategorized && filters.Contains(CategorizedFilterKey);
+        var matchesUncategorized = !isCategorized && filters.Contains(UncategorizedFilterKey);
+
+        return matchesCategorized || matchesUncategorized;
+    }
+
     private void SetFilterCategory(string category)
     {
-        filterCategory = category;
+        filterCategory = NormalizeFilterCategory(category);
         _ = SaveFilterStateAsync();
     }
 
@@ -769,7 +820,8 @@ else
     private async Task LoadFilterStateAsync()
     {
         // 1) Läs från in-memory state (Blazor circuit). Ingen async/lagg.
-        filterCategory = FilterState.FilterCategory;
+        filterCategory = NormalizeFilterCategory(FilterState.FilterCategory);
+        FilterState.FilterCategory = filterCategory;
         searchText = FilterState.SearchText;
         dateFilterMode = FilterState.DateMode;
         isDateMultiSelect = FilterState.IsDateMultiSelect;
@@ -788,7 +840,7 @@ else
             var result = await BrowserStorage.GetAsync<FilterStatePayload>(FilterStateKey);
             if (result.Success && result.Value is FilterStatePayload state)
             {
-                filterCategory = state.FilterCategory ?? filterCategory ?? "all";
+                filterCategory = NormalizeFilterCategory(state.FilterCategory ?? filterCategory ?? "all");
                 searchText = state.SearchText ?? searchText ?? string.Empty;
                 dateFilterMode = state.DateMode;
                 isDateMultiSelect = state.IsDateMultiSelect;
@@ -800,7 +852,7 @@ else
                     .Where(p => p.HasValue)
                     .Select(p => p.Value)
                     .ToHashSet() ?? selectedYearMonths;
-                FilterState.FilterCategory = filterCategory ?? "all";
+                FilterState.FilterCategory = filterCategory;
                 FilterState.SearchText = searchText ?? string.Empty;
                 FilterState.DateMode = dateFilterMode;
                 FilterState.IsDateMultiSelect = isDateMultiSelect;
@@ -819,7 +871,7 @@ else
 
     private async Task SaveFilterStateAsync()
     {
-        FilterState.FilterCategory = filterCategory ?? "all";
+        FilterState.FilterCategory = filterCategory;
         FilterState.SearchText = searchText ?? string.Empty;
         FilterState.DateMode = dateFilterMode;
         FilterState.IsDateMultiSelect = isDateMultiSelect;

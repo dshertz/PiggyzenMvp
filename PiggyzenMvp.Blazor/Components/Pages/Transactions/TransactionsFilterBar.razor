@@ -17,26 +17,32 @@
         </div>
 
         <div class="filter-tag-panel">
-            <div class="tag-panel-header">
-                <button type="button" class="tag-toggle-btn">
+            <div class="tag-row">
+                <button type="button" class="tag-toggle-btn" @onclick="ToggleFilterPanel">
                     <span class="bi bi-sliders"></span>
-                    Filter
+                    @(filtersExpanded ? "Dölj filter" : "Visa filter")
                 </button>
-                <button type="button"
-                        class="tag-clear-btn"
-                        disabled="@(!HasActiveFilter)"
-                        @onclick="ClearFilters">
-                    <span class="bi bi-trash"></span>
-                </button>
-            </div>
-            <div class="tag-palette">
-                @foreach (var option in FilterOptions)
+                @if (HasActiveFilter)
                 {
                     <button type="button"
-                            class="tag-option @(IsFilterActive(option.Key) ? "active" : string.Empty)"
-                            @onclick="() => ToggleFilter(option.Key)">
-                        @option.Label
+                            class="tag-clear-btn"
+                            title="Rensa filter"
+                            @onclick="ClearFilters">
+                        <span class="bi bi-trash"></span>
                     </button>
+                }
+                @if (filtersExpanded)
+                {
+                    <div class="tag-palette">
+                        @foreach (var option in FilterOptions)
+                        {
+                            <button type="button"
+                                    class="tag-option @(IsFilterActive(option.Key) ? "active" : string.Empty)"
+                                    @onclick="() => ToggleFilter(option.Key)">
+                                @option.Label
+                            </button>
+                        }
+                    </div>
                 }
             </div>
             @if (HasActiveFilter)
@@ -52,10 +58,6 @@
                         </button>
                     }
                 </div>
-            }
-            else
-            {
-                <div class="tag-empty">Inga filter valda</div>
             }
         </div>
 
@@ -182,22 +184,25 @@
     [Parameter] public Func<YearMonth, string>? MonthButtonClassSelector { get; set; }
     [Parameter] public Func<YearMonth, string>? MonthLabelSelector { get; set; }
 
+    private bool filtersExpanded = true;
     private bool isSelectorOpen;
+    private HashSet<string> selectedFilterKeys = new(StringComparer.OrdinalIgnoreCase);
     private const string AllFilterKey = "all";
     private const string CategorizedFilterKey = "categorized";
     private const string UncategorizedFilterKey = "uncategorized";
-    private static readonly FilterOption[] FilterOptionsList =
-    [
-        new(CategorizedFilterKey, "Kategoriserade"),
-        new(UncategorizedFilterKey, "Ej kategoriserade")
-    ];
+    private static readonly FilterOption[] FilterOptionsList = new[]
+    {
+        new FilterOption(CategorizedFilterKey, "Kategoriserade"),
+        new FilterOption(UncategorizedFilterKey, "Ej kategoriserade")
+    };
     private bool showSelector => isSelectorOpen && DateFilterMode != DateFilterMode.All;
-    private bool HasActiveFilter => !string.Equals(FilterCategory ?? AllFilterKey, AllFilterKey, StringComparison.OrdinalIgnoreCase);
+    private bool HasActiveFilter => selectedFilterKeys.Count > 0;
     private IEnumerable<FilterOption> FilterOptions => FilterOptionsList;
-    private IEnumerable<FilterOption> ActiveFilters => FilterOptions.Where(o => IsFilterActive(o.Key));
+    private IEnumerable<FilterOption> ActiveFilters => FilterOptions.Where(o => selectedFilterKeys.Contains(o.Key));
 
     protected override void OnParametersSet()
     {
+        selectedFilterKeys = ParseFilterValues(FilterCategory);
         if (DateFilterMode == DateFilterMode.All && isSelectorOpen)
         {
             isSelectorOpen = false;
@@ -210,20 +215,23 @@
         return OnSearchTextChanged.InvokeAsync(value);
     }
 
-    private bool IsFilterActive(string key) =>
-        (FilterCategory ?? AllFilterKey).Equals(key, StringComparison.OrdinalIgnoreCase);
+    private bool IsFilterActive(string key) => selectedFilterKeys.Contains(key);
 
     private Task ToggleFilter(string key)
     {
-        if (IsFilterActive(key))
+        var selection = new HashSet<string>(selectedFilterKeys, StringComparer.OrdinalIgnoreCase);
+        if (!selection.Add(key))
         {
-            return ClearFilters();
+            selection.Remove(key);
         }
 
-        return OnFilterCategoryChanged.InvokeAsync(key);
+        var payload = BuildFilterPayload(selection);
+        return OnFilterCategoryChanged.InvokeAsync(payload);
     }
 
     private Task ClearFilters() => OnFilterCategoryChanged.InvokeAsync(AllFilterKey);
+
+    private void ToggleFilterPanel() => filtersExpanded = !filtersExpanded;
 
     private string GetYearButtonClass(int year) =>
         YearButtonClassSelector?.Invoke(year) ?? "btn btn-sm btn-outline-secondary";
@@ -235,6 +243,34 @@
         MonthLabelSelector?.Invoke(option) ?? $"{option.Year}-{option.Month:D2}";
 
     private readonly record struct FilterOption(string Key, string Label);
+
+    private static HashSet<string> ParseFilterValues(string? raw)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(raw) || raw.Equals(AllFilterKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return set;
+        }
+
+        var parts = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var part in parts)
+        {
+            set.Add(part);
+        }
+
+        return set;
+    }
+
+    private static string BuildFilterPayload(HashSet<string> selection)
+    {
+        if (selection.Count == 0)
+        {
+            return AllFilterKey;
+        }
+
+        var ordered = FilterOptionsList.Select(o => o.Key).Where(selection.Contains);
+        return string.Join(',', ordered);
+    }
 
     private void ToggleSelector()
     {

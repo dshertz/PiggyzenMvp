@@ -2,8 +2,7 @@
     position: sticky;
     top: 0;
     z-index: 5;
-    /* background: #f7f7fb; */
-    background: #ffffff;
+    background: #f7f7fb;
     border-bottom: 1px solid rgba(18, 11, 36, 0.08);
     margin-bottom: 1.5rem;
 }
@@ -12,8 +11,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    padding: 0.5rem 0rem;
-    /* padding: 0.5rem 1.5rem; */
+    padding: 0.5rem 1.5rem;
 }
 
 .topbar-row {
@@ -58,10 +56,11 @@
     border-bottom: 1px solid rgba(18, 11, 36, 0.08);
 }
 
-.tag-panel-header {
+.tag-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .tag-toggle-btn {
@@ -86,12 +85,15 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    margin-left: 0.25rem;
 }
 
 .tag-palette {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .tag-option {
@@ -125,11 +127,6 @@
     gap: 0.4rem;
     padding: 0.25rem 0.7rem;
     cursor: pointer;
-}
-
-.tag-empty {
-    color: #82809a;
-    font-size: 0.85rem;
 }
 
 .chip-row {
