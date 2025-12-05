@@ -96,6 +96,12 @@
     min-width: 0;
 }
 
+.tag-active-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
 .tag-option {
     border-radius: 999px;
     border: 1px solid rgba(18, 11, 36, 0.15);

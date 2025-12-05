@@ -30,14 +30,25 @@
                             @onclick="ClearFilters">
                         <span class="bi bi-trash"></span>
                     </button>
+                    <div class="tag-active-list">
+                        @foreach (var option in ActiveFilters)
+                        {
+                            <button type="button"
+                                    class="active-tag"
+                                    @onclick="() => ToggleFilter(option.Key)">
+                                <span>@option.Label</span>
+                                <span class="bi bi-x"></span>
+                            </button>
+                        }
+                    </div>
                 }
                 @if (filtersExpanded)
                 {
                     <div class="tag-palette">
-                        @foreach (var option in FilterOptions)
+                        @foreach (var option in FilterOptions.Where(o => !IsFilterActive(o.Key)))
                         {
                             <button type="button"
-                                    class="tag-option @(IsFilterActive(option.Key) ? "active" : string.Empty)"
+                                    class="tag-option"
                                     @onclick="() => ToggleFilter(option.Key)">
                                 @option.Label
                             </button>
@@ -45,20 +56,6 @@
                     </div>
                 }
             </div>
-            @if (HasActiveFilter)
-            {
-                <div class="active-tags">
-                    @foreach (var option in ActiveFilters)
-                    {
-                        <button type="button"
-                                class="active-tag"
-                                @onclick="() => ToggleFilter(option.Key)">
-                            <span>@option.Label</span>
-                            <span class="bi bi-x"></span>
-                        </button>
-                    }
-                </div>
-            }
         </div>
 
         <div class="date-controls-block">
