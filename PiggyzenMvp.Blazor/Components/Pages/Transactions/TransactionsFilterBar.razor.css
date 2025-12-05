@@ -50,10 +50,86 @@
     font-size: 1rem;
 }
 
-.controls-row {
+.filter-tag-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(18, 11, 36, 0.08);
+}
+
+.tag-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tag-toggle-btn {
+    border: none;
+    background: #12b0e8;
+    color: white;
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 500;
+}
+
+.tag-clear-btn {
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(18, 11, 36, 0.25);
+    background: white;
+    color: #120b24;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tag-palette {
+    display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
-    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.tag-option {
+    border-radius: 999px;
+    border: 1px solid rgba(18, 11, 36, 0.15);
+    padding: 0.35rem 0.85rem;
+    background: white;
+    color: #120b24;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+.tag-option.active {
+    background: #dfeaff;
+    border-color: #7fa0ff;
+}
+
+.active-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.active-tag {
+    border-radius: 999px;
+    border: 1px solid #7fa0ff;
+    background: #eaf1ff;
+    color: #0f1c3d;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.7rem;
+    cursor: pointer;
+}
+
+.tag-empty {
+    color: #82809a;
+    font-size: 0.85rem;
 }
 
 .chip-row {
@@ -62,34 +138,11 @@
     gap: 0.5rem;
 }
 
-.filter-pill {
-    border-radius: 999px;
-    border: 1px solid rgba(18, 11, 36, 0.2);
-    padding: 0.35rem 0.9rem;
-    background: white;
-    color: #120b24;
-    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.filter-pill.active {
-    background: #120b24;
-    color: white;
-    border-color: #120b24;
-}
-
-.filter-pill.pending {
-    opacity: 0.4;
-}
-
-.filter-pill:hover:not(.active) {
-    border-color: #5b2be1;
-}
-
-.date-controls {
+.date-controls-block {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    flex: 1 1 320px;
+    padding-top: 0.75rem;
 }
 
 .mode-buttons {

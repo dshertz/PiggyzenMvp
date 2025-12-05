@@ -16,88 +16,111 @@
             </div>
         </div>
 
-        <div class="topbar-row controls-row">
-            <div class="chip-row filter-row">
-                <button type="button"
-                        class="filter-pill @GetFilterClass(AllFilterKey)"
-                        @onclick="() => OnFilterCategoryChanged.InvokeAsync(AllFilterKey)">
-                    Alla
+        <div class="filter-tag-panel">
+            <div class="tag-panel-header">
+                <button type="button" class="tag-toggle-btn">
+                    <span class="bi bi-sliders"></span>
+                    Filter
                 </button>
                 <button type="button"
-                        class="filter-pill @GetFilterClass(CategorizedFilterKey)"
-                        @onclick="() => OnFilterCategoryChanged.InvokeAsync(CategorizedFilterKey)">
-                    Kategoriserade
+                        class="tag-clear-btn"
+                        disabled="@(!HasActiveFilter)"
+                        @onclick="ClearFilters">
+                    <span class="bi bi-trash"></span>
+                </button>
+            </div>
+            <div class="tag-palette">
+                @foreach (var option in FilterOptions)
+                {
+                    <button type="button"
+                            class="tag-option @(IsFilterActive(option.Key) ? "active" : string.Empty)"
+                            @onclick="() => ToggleFilter(option.Key)">
+                        @option.Label
+                    </button>
+                }
+            </div>
+            @if (HasActiveFilter)
+            {
+                <div class="active-tags">
+                    @foreach (var option in ActiveFilters)
+                    {
+                        <button type="button"
+                                class="active-tag"
+                                @onclick="() => ToggleFilter(option.Key)">
+                            <span>@option.Label</span>
+                            <span class="bi bi-x"></span>
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="tag-empty">Inga filter valda</div>
+            }
+        </div>
+
+        <div class="date-controls-block">
+            <div class="mode-buttons">
+                <button type="button"
+                        class="mode-btn @(DateFilterMode == DateFilterMode.All ? "active" : string.Empty)"
+                        @onclick="() => ChangeMode(DateFilterMode.All)">
+                    Alla datum
                 </button>
                 <button type="button"
-                        class="filter-pill @GetFilterClass(UncategorizedFilterKey)"
-                        @onclick="() => OnFilterCategoryChanged.InvokeAsync(UncategorizedFilterKey)">
-                    Ej kategoriserade
+                        class="mode-btn @(DateFilterMode == DateFilterMode.Yearly ? "active" : string.Empty)"
+                        @onclick="() => ChangeMode(DateFilterMode.Yearly)">
+                    År
+                </button>
+                <button type="button"
+                        class="mode-btn @(DateFilterMode == DateFilterMode.Monthly ? "active" : string.Empty)"
+                        @onclick="() => ChangeMode(DateFilterMode.Monthly)">
+                    Månad
                 </button>
             </div>
 
-            <div class="date-controls">
-                <div class="mode-buttons">
+            @if (DateFilterMode != DateFilterMode.All)
+            {
+                <div class="period-actions">
                     <button type="button"
-                            class="mode-btn @(DateFilterMode == DateFilterMode.All ? "active" : string.Empty)"
-                            @onclick="() => ChangeMode(DateFilterMode.All)">
-                        Alla datum
+                            class="nav-btn"
+                            disabled="@IsPeriodNavigationDisabled"
+                            @onclick="() => OnStepPeriod.InvokeAsync(-1)">
+                        <i class="bi bi-chevron-left"></i>
                     </button>
                     <button type="button"
-                            class="mode-btn @(DateFilterMode == DateFilterMode.Yearly ? "active" : string.Empty)"
-                            @onclick="() => ChangeMode(DateFilterMode.Yearly)">
-                        År
+                            class="current-period-btn"
+                            disabled="@IsDateControlsDisabled"
+                            @onclick="ToggleSelector">
+                        @CurrentPeriodLabel
+                        <span class="bi @(showSelector ? "bi-chevron-up" : "bi-chevron-down")"></span>
                     </button>
                     <button type="button"
-                            class="mode-btn @(DateFilterMode == DateFilterMode.Monthly ? "active" : string.Empty)"
-                            @onclick="() => ChangeMode(DateFilterMode.Monthly)">
-                        Månad
+                            class="nav-btn"
+                            disabled="@IsPeriodNavigationDisabled"
+                            @onclick="() => OnStepPeriod.InvokeAsync(1)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+
+                    <button type="button"
+                            class="pill-btn"
+                            disabled="@IsDateControlsDisabled"
+                            @onclick="() => OnToggleDateMultiSelect.InvokeAsync()">
+                        @(IsDateMultiSelect ? "Multi på" : "Multi av")
+                    </button>
+                    <button type="button"
+                            class="pill-btn secondary"
+                            disabled="@IsDateControlsDisabled"
+                            @onclick="() => OnClearDateFilters.InvokeAsync()">
+                        Rensa
                     </button>
                 </div>
-
-                @if (DateFilterMode != DateFilterMode.All)
-                {
-                    <div class="period-actions">
-                        <button type="button"
-                                class="nav-btn"
-                                disabled="@IsPeriodNavigationDisabled"
-                                @onclick="() => OnStepPeriod.InvokeAsync(-1)">
-                            <i class="bi bi-chevron-left"></i>
-                        </button>
-                        <button type="button"
-                                class="current-period-btn"
-                                disabled="@IsDateControlsDisabled"
-                                @onclick="ToggleSelector">
-                            @CurrentPeriodLabel
-                            <span class="bi @(showSelector ? "bi-chevron-up" : "bi-chevron-down")"></span>
-                        </button>
-                        <button type="button"
-                                class="nav-btn"
-                                disabled="@IsPeriodNavigationDisabled"
-                                @onclick="() => OnStepPeriod.InvokeAsync(1)">
-                            <i class="bi bi-chevron-right"></i>
-                        </button>
-
-                        <button type="button"
-                                class="pill-btn"
-                                disabled="@IsDateControlsDisabled"
-                                @onclick="() => OnToggleDateMultiSelect.InvokeAsync()">
-                            @(IsDateMultiSelect ? "Multi på" : "Multi av")
-                        </button>
-                        <button type="button"
-                                class="pill-btn secondary"
-                                disabled="@IsDateControlsDisabled"
-                                @onclick="() => OnClearDateFilters.InvokeAsync()">
-                            Rensa
-                        </button>
-                    </div>
-                }
-                else
-                {
-                    <div class="period-actions">
-                        <span class="text-muted small">Alla datum visas.</span>
-                    </div>
-                }
-            </div>
+            }
+            else
+            {
+                <div class="period-actions">
+                    <span class="text-muted small">Alla datum visas.</span>
+                </div>
+            }
         </div>
 
         @if (showSelector)
@@ -163,7 +186,15 @@
     private const string AllFilterKey = "all";
     private const string CategorizedFilterKey = "categorized";
     private const string UncategorizedFilterKey = "uncategorized";
+    private static readonly FilterOption[] FilterOptionsList =
+    [
+        new(CategorizedFilterKey, "Kategoriserade"),
+        new(UncategorizedFilterKey, "Ej kategoriserade")
+    ];
     private bool showSelector => isSelectorOpen && DateFilterMode != DateFilterMode.All;
+    private bool HasActiveFilter => !string.Equals(FilterCategory ?? AllFilterKey, AllFilterKey, StringComparison.OrdinalIgnoreCase);
+    private IEnumerable<FilterOption> FilterOptions => FilterOptionsList;
+    private IEnumerable<FilterOption> ActiveFilters => FilterOptions.Where(o => IsFilterActive(o.Key));
 
     protected override void OnParametersSet()
     {
@@ -179,16 +210,20 @@
         return OnSearchTextChanged.InvokeAsync(value);
     }
 
-    private string GetFilterClass(string category)
+    private bool IsFilterActive(string key) =>
+        (FilterCategory ?? AllFilterKey).Equals(key, StringComparison.OrdinalIgnoreCase);
+
+    private Task ToggleFilter(string key)
     {
-        if (!FilterStateLoaded)
+        if (IsFilterActive(key))
         {
-            return "pending";
+            return ClearFilters();
         }
 
-        var active = (FilterCategory ?? "all").Equals(category, StringComparison.OrdinalIgnoreCase);
-        return active ? "active" : string.Empty;
+        return OnFilterCategoryChanged.InvokeAsync(key);
     }
+
+    private Task ClearFilters() => OnFilterCategoryChanged.InvokeAsync(AllFilterKey);
 
     private string GetYearButtonClass(int year) =>
         YearButtonClassSelector?.Invoke(year) ?? "btn btn-sm btn-outline-secondary";
@@ -198,6 +233,8 @@
 
     private string GetMonthLabel(YearMonth option) =>
         MonthLabelSelector?.Invoke(option) ?? $"{option.Year}-{option.Month:D2}";
+
+    private readonly record struct FilterOption(string Key, string Label);
 
     private void ToggleSelector()
     {
