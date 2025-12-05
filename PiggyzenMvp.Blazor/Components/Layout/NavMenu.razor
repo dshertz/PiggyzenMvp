@@ -1,45 +1,25 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">PiggyzenMvp.Blazor</a>
-    </div>
-</div>
+﻿<div class="nav-rail">
+    <a class="brand-link" href="" aria-label="Piggyzen hem" data-tooltip="Piggyzen hem">
+        <div class="brand-logo">
+            <span class="logo-ear left"></span>
+            <span class="logo-ear right"></span>
+            <span class="logo-face">
+                <span class="logo-eye left"></span>
+                <span class="logo-eye right"></span>
+                <span class="logo-nose"></span>
+            </span>
+        </div>
+    </a>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/transactions" Match="NavLinkMatch.All">
-                <span class="bi bi-credit-card-fill-nav-menu" aria-hidden="true"></span> Transaktioner
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/Import" Match="NavLinkMatch.All">
-                <span class="bi bi-file-earmark-arrow-up-fill-nav-menu" aria-hidden="true"></span> Import
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/categories" Match="NavLinkMatch.All">
-                <span class="bi bi-file-earmark-arrow-up-fill-nav-menu" aria-hidden="true"></span> Categories
-            </NavLink>
-        </div>
-
-       @*  <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div> *@
+    <nav class="nav-rail-links">
+        <NavLink class="nav-icon-link" href="/transactions" Match="NavLinkMatch.All" data-tooltip="Transaktioner" aria-label="Transaktioner">
+            <span class="bi bi-credit-card-fill-nav-menu" aria-hidden="true"></span>
+        </NavLink>
+        <NavLink class="nav-icon-link" href="/Import" Match="NavLinkMatch.All" data-tooltip="Import" aria-label="Import">
+            <span class="bi bi-file-earmark-arrow-up-fill-nav-menu" aria-hidden="true"></span>
+        </NavLink>
+        <NavLink class="nav-icon-link" href="/categories" Match="NavLinkMatch.All" data-tooltip="Kategorier" aria-label="Kategorier">
+            <span class="bi bi-tags-fill-nav-menu" aria-hidden="true"></span>
+        </NavLink>
     </nav>
 </div>
-
