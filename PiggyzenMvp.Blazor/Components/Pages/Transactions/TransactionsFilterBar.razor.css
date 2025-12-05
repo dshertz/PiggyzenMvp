@@ -20,7 +20,7 @@
     display: flex;
     align-items: center;
     width: 100%;
-    min-height: 56px;
+    min-height: 48px;
 }
 
 .search-row {
@@ -34,7 +34,7 @@
 
 .search-input .form-control {
     padding-left: 2.5rem;
-    height: 56px;
+    height: 48px;
     border-radius: 12px;
     border: 1px solid rgba(18, 11, 36, 0.12);
     background: white;
