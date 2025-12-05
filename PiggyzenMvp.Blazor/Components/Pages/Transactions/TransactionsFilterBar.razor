@@ -4,111 +4,107 @@
 
 <section class="transactions-filter-bar">
     <div class="filter-bar-inner">
-        <div class="filter-primary-row">
-            <div class="search-block">
-                @* <label class="form-label mb-1" for="transaction-search">Sök</label> *@
-                <div class="search-input">
-                    <input id="transaction-search"
-                           class="form-control"
-                           type="text"
-                           value="@SearchText"
-                           placeholder="Sök"
-                           @oninput="HandleSearchInput" />
-                    <span class="search-icon bi bi-search"></span>
-                </div>
-            </div>
-            <div class="filter-chip-group">
-                @* <label class="form-label mb-1">Filtrera</label> *@
-                <div class="chip-row">
-                    <button type="button"
-                            class="filter-pill @GetFilterClass(AllFilterKey)"
-                            @onclick="() => OnFilterCategoryChanged.InvokeAsync(AllFilterKey)">
-                        Alla
-                    </button>
-                    <button type="button"
-                            class="filter-pill @GetFilterClass(CategorizedFilterKey)"
-                            @onclick="() => OnFilterCategoryChanged.InvokeAsync(CategorizedFilterKey)">
-                        Kategoriserade
-                    </button>
-                    <button type="button"
-                            class="filter-pill @GetFilterClass(UncategorizedFilterKey)"
-                            @onclick="() => OnFilterCategoryChanged.InvokeAsync(UncategorizedFilterKey)">
-                        Ej kategoriserade
-                    </button>
-                </div>
-            </div>
-            <div class="filter-badges ms-auto">
-                <span class="badge bg-success">Kategoriserade: @CategorizedCount</span>
-                <span class="badge bg-warning text-dark">Ej kategoriserade: @UncategorizedCount</span>
-                <span class="badge bg-info text-dark">Totalt: @TotalCount</span>
+        <div class="topbar-row search-row">
+            <div class="search-input">
+                <input id="transaction-search"
+                       class="form-control"
+                       type="text"
+                       value="@SearchText"
+                       placeholder="Sök transaktioner"
+                       @oninput="HandleSearchInput" />
+                <span class="search-icon bi bi-search"></span>
             </div>
         </div>
 
-        <div class="date-card">
-            <div class="date-card-toolbar">
-                <div class="toolbar-left">
-                    @* <div class="fw-semibold text-uppercase small text-muted">Datumfilter</div> *@
-                    <div class="btn-group" role="group" aria-label="Datumläge">
-                        <button type="button"
-                                class="btn btn-outline-secondary @(DateFilterMode == DateFilterMode.All ? "active" : string.Empty)"
-                                @onclick="() => OnDateFilterModeChanged.InvokeAsync(DateFilterMode.All)">
-                            Alla
-                        </button>
-                        <button type="button"
-                                class="btn btn-outline-secondary @(DateFilterMode == DateFilterMode.Yearly ? "active" : string.Empty)"
-                                @onclick="() => OnDateFilterModeChanged.InvokeAsync(DateFilterMode.Yearly)">
-                            År
-                        </button>
-                        <button type="button"
-                                class="btn btn-outline-secondary @(DateFilterMode == DateFilterMode.Monthly ? "active" : string.Empty)"
-                                @onclick="() => OnDateFilterModeChanged.InvokeAsync(DateFilterMode.Monthly)">
-                            Månad
-                        </button>
-                    </div>
+        <div class="topbar-row controls-row">
+            <div class="chip-row filter-row">
+                <button type="button"
+                        class="filter-pill @GetFilterClass(AllFilterKey)"
+                        @onclick="() => OnFilterCategoryChanged.InvokeAsync(AllFilterKey)">
+                    Alla
+                </button>
+                <button type="button"
+                        class="filter-pill @GetFilterClass(CategorizedFilterKey)"
+                        @onclick="() => OnFilterCategoryChanged.InvokeAsync(CategorizedFilterKey)">
+                    Kategoriserade
+                </button>
+                <button type="button"
+                        class="filter-pill @GetFilterClass(UncategorizedFilterKey)"
+                        @onclick="() => OnFilterCategoryChanged.InvokeAsync(UncategorizedFilterKey)">
+                    Ej kategoriserade
+                </button>
+            </div>
+
+            <div class="date-controls">
+                <div class="mode-buttons">
+                    <button type="button"
+                            class="mode-btn @(DateFilterMode == DateFilterMode.All ? "active" : string.Empty)"
+                            @onclick="() => ChangeMode(DateFilterMode.All)">
+                        Alla datum
+                    </button>
+                    <button type="button"
+                            class="mode-btn @(DateFilterMode == DateFilterMode.Yearly ? "active" : string.Empty)"
+                            @onclick="() => ChangeMode(DateFilterMode.Yearly)">
+                        År
+                    </button>
+                    <button type="button"
+                            class="mode-btn @(DateFilterMode == DateFilterMode.Monthly ? "active" : string.Empty)"
+                            @onclick="() => ChangeMode(DateFilterMode.Monthly)">
+                        Månad
+                    </button>
                 </div>
-                <div class="toolbar-right">
-                    <div class="btn-group" role="group" aria-label="Periodnavigation">
+
+                @if (DateFilterMode != DateFilterMode.All)
+                {
+                    <div class="period-actions">
                         <button type="button"
-                                class="btn btn-outline-secondary"
+                                class="nav-btn"
                                 disabled="@IsPeriodNavigationDisabled"
                                 @onclick="() => OnStepPeriod.InvokeAsync(-1)">
                             <i class="bi bi-chevron-left"></i>
                         </button>
                         <button type="button"
-                                class="btn btn-outline-secondary"
-                                disabled>
+                                class="current-period-btn"
+                                disabled="@IsDateControlsDisabled"
+                                @onclick="ToggleSelector">
                             @CurrentPeriodLabel
+                            <span class="bi @(showSelector ? "bi-chevron-up" : "bi-chevron-down")"></span>
                         </button>
                         <button type="button"
-                                class="btn btn-outline-secondary"
+                                class="nav-btn"
                                 disabled="@IsPeriodNavigationDisabled"
                                 @onclick="() => OnStepPeriod.InvokeAsync(1)">
                             <i class="bi bi-chevron-right"></i>
                         </button>
-                    </div>
-                    <button type="button"
-                            class="btn btn-outline-primary btn-sm ms-2"
-                            disabled="@IsDateControlsDisabled"
-                            @onclick="() => OnToggleDateMultiSelect.InvokeAsync()">
-                        @(IsDateMultiSelect ? "Multi på" : "Multi av")
-                    </button>
-                    <button type="button"
-                            class="btn btn-link text-decoration-none btn-sm"
-                            disabled="@IsDateControlsDisabled"
-                            @onclick="() => OnClearDateFilters.InvokeAsync()">
-                        Rensa filter
-                    </button>
-                </div>
-            </div>
 
-            @if (DateFilterMode == DateFilterMode.All)
-            {
-                <div class="text-muted small">Alla datum visas.</div>
-            }
-            else if (DateFilterMode == DateFilterMode.Yearly)
-            {
-                <div class="date-chip-section">
-                    <span class="text-muted text-uppercase small fw-semibold">År</span>
+                        <button type="button"
+                                class="pill-btn"
+                                disabled="@IsDateControlsDisabled"
+                                @onclick="() => OnToggleDateMultiSelect.InvokeAsync()">
+                            @(IsDateMultiSelect ? "Multi på" : "Multi av")
+                        </button>
+                        <button type="button"
+                                class="pill-btn secondary"
+                                disabled="@IsDateControlsDisabled"
+                                @onclick="() => OnClearDateFilters.InvokeAsync()">
+                            Rensa
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="period-actions">
+                        <span class="text-muted small">Alla datum visas.</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (showSelector)
+        {
+            <div class="period-selector">
+                @if (DateFilterMode == DateFilterMode.Yearly)
+                {
                     <div class="chip-row">
                         @foreach (var year in YearOptions)
                         {
@@ -119,12 +115,9 @@
                             </button>
                         }
                     </div>
-                </div>
-            }
-            else if (DateFilterMode == DateFilterMode.Monthly)
-            {
-                <div class="date-chip-section">
-                    @* <span class="text-muted text-uppercase small fw-semibold">Period</span> *@
+                }
+                else if (DateFilterMode == DateFilterMode.Monthly)
+                {
                     <div class="chip-row">
                         @foreach (var option in MonthOptions)
                         {
@@ -135,9 +128,9 @@
                             </button>
                         }
                     </div>
-                </div>
-            }
-        </div>
+                }
+            </div>
+        }
     </div>
 </section>
 
@@ -147,9 +140,6 @@
     [Parameter] public string? FilterCategory { get; set; }
     [Parameter] public bool FilterStateLoaded { get; set; }
     [Parameter] public EventCallback<string> OnFilterCategoryChanged { get; set; }
-    [Parameter] public int CategorizedCount { get; set; }
-    [Parameter] public int UncategorizedCount { get; set; }
-    [Parameter] public int TotalCount { get; set; }
 
     [Parameter] public DateFilterMode DateFilterMode { get; set; }
     [Parameter] public bool IsDateMultiSelect { get; set; }
@@ -169,9 +159,19 @@
     [Parameter] public Func<YearMonth, string>? MonthButtonClassSelector { get; set; }
     [Parameter] public Func<YearMonth, string>? MonthLabelSelector { get; set; }
 
+    private bool isSelectorOpen;
     private const string AllFilterKey = "all";
     private const string CategorizedFilterKey = "categorized";
     private const string UncategorizedFilterKey = "uncategorized";
+    private bool showSelector => isSelectorOpen && DateFilterMode != DateFilterMode.All;
+
+    protected override void OnParametersSet()
+    {
+        if (DateFilterMode == DateFilterMode.All && isSelectorOpen)
+        {
+            isSelectorOpen = false;
+        }
+    }
 
     private Task HandleSearchInput(ChangeEventArgs e)
     {
@@ -198,4 +198,34 @@
 
     private string GetMonthLabel(YearMonth option) =>
         MonthLabelSelector?.Invoke(option) ?? $"{option.Year}-{option.Month:D2}";
+
+    private void ToggleSelector()
+    {
+        if (DateFilterMode == DateFilterMode.All || IsDateControlsDisabled)
+        {
+            isSelectorOpen = false;
+            return;
+        }
+
+        isSelectorOpen = !isSelectorOpen;
+    }
+
+    private void ChangeMode(DateFilterMode mode)
+    {
+        if (DateFilterMode == mode)
+        {
+            if (mode != DateFilterMode.All)
+            {
+                ToggleSelector();
+            }
+            else
+            {
+                isSelectorOpen = false;
+            }
+            return;
+        }
+
+        isSelectorOpen = mode != DateFilterMode.All;
+        _ = OnDateFilterModeChanged.InvokeAsync(mode);
+    }
 }

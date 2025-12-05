@@ -14,9 +14,6 @@
                        FilterStateLoaded="@filterStateLoaded"
                        OnSearchTextChanged="UpdateSearchTextAsync"
                        OnFilterCategoryChanged="SetFilterCategory"
-                       CategorizedCount="@CategorizedCount"
-                       UncategorizedCount="@UncategorizedCount"
-                       TotalCount="@TotalTransactions"
                        DateFilterMode="@dateFilterMode"
                        IsDateMultiSelect="@isDateMultiSelect"
                        IsDateControlsDisabled="@IsDateControlsDisabled"
@@ -121,6 +118,12 @@ else
         </tbody>
     </table>
 }
+
+<div class="transactions-status-bar">
+    <span>Kategoriserade: <strong>@CategorizedCount</strong></span>
+    <span>Ej kategoriserade: <strong>@UncategorizedCount</strong></span>
+    <span>Totalt: <strong>@TotalTransactions</strong></span>
+</div>
 
 @code {
     private List<TransactionDto>? transactions;
