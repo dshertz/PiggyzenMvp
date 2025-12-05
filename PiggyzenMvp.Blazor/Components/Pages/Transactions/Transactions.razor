@@ -128,6 +128,7 @@ else
 @code {
     private List<TransactionDto>? transactions;
     private List<CategoryDto> categories = new();
+    private List<CategoryGroupDto> categoryGroups = new();
     private HashSet<int> selectedTransactionIds = new();
     private int? bulkCategoryId;
     private bool isBulkCategorizing;
@@ -953,13 +954,30 @@ else
 
     private async Task LoadCategoriesAsync(HttpClient client)
     {
-        var data = await client.GetFromJsonAsync<List<CategoryGroupDto>>("api/categories");
-        categories = data?
+        var data = await client.GetFromJsonAsync<List<CategoryGroupDto>>("api/categories") ?? new();
+
+        categoryGroups = data
+            .Select(g => new CategoryGroupDto
+            {
+                Id = g.Id,
+                Key = g.Key,
+                DisplayName = g.DisplayName,
+                SortOrder = g.SortOrder,
+                Categories = g.Categories
+                    .Where(c => c.IsActive && !c.IsHidden)
+                    .OrderBy(c => c.SortOrder)
+                    .ToList()
+            })
+            .Where(g => g.Categories.Count > 0)
+            .OrderBy(g => g.SortOrder)
+            .ThenBy(g => g.DisplayName)
+            .ToList();
+
+        categories = categoryGroups
             .SelectMany(g => g.Categories)
-            .Where(c => c.IsActive && !c.IsHidden)
             .OrderBy(c => c.GroupId)
             .ThenBy(c => c.SortOrder)
-            .ToList() ?? new();
+            .ToList();
     }
 
     private async Task RefreshTransactionsAsync()
@@ -993,30 +1011,22 @@ else
         var baseSectionOptions = CreateBaseFilterOptions();
         sections.Add(new FilterChipSection(null, baseSectionOptions));
 
-        var groupedCategories = categories
-            .GroupBy(c => c.GroupId)
-            .OrderBy(g => g.First().GroupDisplayName)
-            .ToList();
-
-        foreach (var group in groupedCategories)
+        foreach (var group in categoryGroups)
         {
-            var representative = group.First();
-            var groupLabel = string.IsNullOrWhiteSpace(representative.GroupDisplayName)
-                ? "Övrigt"
-                : representative.GroupDisplayName;
-            var groupKey = $"{GroupFilterPrefix}{representative.GroupId}";
+            var groupLabel = string.IsNullOrWhiteSpace(group.DisplayName) ? "Övrigt" : group.DisplayName;
+            var groupKey = $"{GroupFilterPrefix}{group.Id}";
 
             var sectionOptions = new List<FilterChipOption>
             {
                 new FilterChipOption(groupKey, groupLabel)
             };
 
-            foreach (var category in group.OrderBy(c => c.SortOrder))
+            foreach (var category in group.Categories)
             {
                 sectionOptions.Add(new FilterChipOption($"{CategoryFilterPrefix}{category.Id}", category.EffectiveName, groupKey));
             }
 
-            groupCategoryMap[groupKey] = group.Select(c => c.Id).ToHashSet();
+            groupCategoryMap[groupKey] = group.Categories.Select(c => c.Id).ToHashSet();
             sections.Add(new FilterChipSection(null, sectionOptions));
         }
 

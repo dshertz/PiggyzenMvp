@@ -45,38 +45,65 @@
             </div>
             @if (filtersExpanded)
             {
-                <div class="tag-sections">
-                    @foreach (var filterSection in FilterSections)
-                    {
-                        if (filterSection.Options.Count == 0)
+                var generalSection = FilterSections.FirstOrDefault();
+                var categorySections = FilterSections.Skip(1).ToList();
+
+                if (generalSection?.Options.Count > 0)
+                {
+                    <div class="tag-general-row">
+                        @foreach (var option in generalSection.Options.Where(o => !IsFilterActive(o.Key)))
                         {
-                            continue;
+                            <button type="button"
+                                    class="tag-option"
+                                    @onclick="() => ToggleFilter(option.Key)">
+                                @option.Label
+                            </button>
                         }
+                    </div>
+                }
 
-                        <div class="tag-section">
-                            <div class="tag-palette">
-                                @foreach (var chip in filterSection.Options)
+                if (categorySections.Count > 0)
+                {
+                    <div class="tag-columns">
+                        @foreach (var section in categorySections)
+                        {
+                            if (section.Options.Count == 0)
+                            {
+                                continue;
+                            }
+
+                            var groupChip = section.Options.First();
+                            var categoryChips = section.Options.Skip(1);
+
+                            <div class="tag-column">
+                                @if (!IsFilterActive(groupChip.Key))
                                 {
-                                    if (IsHiddenByParent(chip))
-                                    {
-                                        continue;
-                                    }
-
-                                    if (IsFilterActive(chip.Key))
-                                    {
-                                        continue;
-                                    }
-
                                     <button type="button"
-                                            class="tag-option"
-                                            @onclick="() => ToggleFilter(chip.Key)">
-                                        @chip.Label
+                                            class="group-chip"
+                                            @onclick="() => ToggleFilter(groupChip.Key)">
+                                        @groupChip.Label
                                     </button>
                                 }
+
+                                <div class="tag-column-categories">
+                                    @foreach (var chip in categoryChips)
+                                    {
+                                        if (IsHiddenByParent(chip) || IsFilterActive(chip.Key))
+                                        {
+                                            continue;
+                                        }
+
+                                        <button type="button"
+                                                class="tag-option"
+                                                @onclick="() => ToggleFilter(chip.Key)">
+                                            @chip.Label
+                                        </button>
+                                    }
+                                </div>
                             </div>
-                        </div>
-                    }
-                </div>
+                        }
+                    </div>
+                }
             }
         </div>
 
