@@ -160,7 +160,6 @@
     [Parameter] public string? SearchText { get; set; }
     [Parameter] public EventCallback<string?> OnSearchTextChanged { get; set; }
     [Parameter] public string? FilterCategory { get; set; }
-    [Parameter] public bool FilterStateLoaded { get; set; }
     [Parameter] public EventCallback<string> OnFilterCategoryChanged { get; set; }
 
     [Parameter] public DateFilterMode DateFilterMode { get; set; }
@@ -180,25 +179,21 @@
     [Parameter] public Func<int, string>? YearButtonClassSelector { get; set; }
     [Parameter] public Func<YearMonth, string>? MonthButtonClassSelector { get; set; }
     [Parameter] public Func<YearMonth, string>? MonthLabelSelector { get; set; }
+    [Parameter] public IReadOnlyList<FilterChipOption> FilterOptions { get; set; } = Array.Empty<FilterChipOption>();
 
     private bool filtersExpanded = true;
     private bool isSelectorOpen;
     private HashSet<string> selectedFilterKeys = new(StringComparer.OrdinalIgnoreCase);
     private const string AllFilterKey = "all";
-    private const string CategorizedFilterKey = "categorized";
-    private const string UncategorizedFilterKey = "uncategorized";
-    private static readonly FilterOption[] FilterOptionsList = new[]
-    {
-        new FilterOption(CategorizedFilterKey, "Kategoriserade"),
-        new FilterOption(UncategorizedFilterKey, "Ej kategoriserade")
-    };
+    private List<FilterChipOption> filterOrder = new();
     private bool showSelector => isSelectorOpen && DateFilterMode != DateFilterMode.All;
     private bool HasActiveFilter => selectedFilterKeys.Count > 0;
-    private IEnumerable<FilterOption> FilterOptions => FilterOptionsList;
-    private IEnumerable<FilterOption> ActiveFilters => FilterOptions.Where(o => selectedFilterKeys.Contains(o.Key));
+    private IEnumerable<FilterChipOption> ActiveFilters =>
+        filterOrder.Where(o => selectedFilterKeys.Contains(o.Key));
 
     protected override void OnParametersSet()
     {
+        filterOrder = FilterOptions?.ToList() ?? new List<FilterChipOption>();
         selectedFilterKeys = ParseFilterValues(FilterCategory);
         if (DateFilterMode == DateFilterMode.All && isSelectorOpen)
         {
@@ -239,8 +234,6 @@
     private string GetMonthLabel(YearMonth option) =>
         MonthLabelSelector?.Invoke(option) ?? $"{option.Year}-{option.Month:D2}";
 
-    private readonly record struct FilterOption(string Key, string Label);
-
     private static HashSet<string> ParseFilterValues(string? raw)
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -258,15 +251,18 @@
         return set;
     }
 
-    private static string BuildFilterPayload(HashSet<string> selection)
+    private string BuildFilterPayload(HashSet<string> selection)
     {
         if (selection.Count == 0)
         {
             return AllFilterKey;
         }
 
-        var ordered = FilterOptionsList.Select(o => o.Key).Where(selection.Contains);
-        return string.Join(',', ordered);
+        var orderKeys = new HashSet<string>(filterOrder.Select(o => o.Key), StringComparer.OrdinalIgnoreCase);
+        var ordered = filterOrder.Select(o => o.Key).Where(selection.Contains);
+        var extras = selection.Where(key => !orderKeys.Contains(key))
+            .OrderBy(key => key, StringComparer.OrdinalIgnoreCase);
+        return string.Join(',', ordered.Concat(extras));
     }
 
     private void ToggleSelector()

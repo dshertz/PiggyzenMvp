@@ -11,7 +11,7 @@
 
 <TransactionsFilterBar SearchText="@searchText"
                        FilterCategory="@CurrentFilterCategory"
-                       FilterStateLoaded="@filterStateLoaded"
+                       FilterOptions="@filterOptions"
                        OnSearchTextChanged="UpdateSearchTextAsync"
                        OnFilterCategoryChanged="SetFilterCategory"
                        DateFilterMode="@dateFilterMode"
@@ -138,7 +138,6 @@ else
     private string searchText = "";
     private string filterCategory = "all";
     private const string FilterStateKey = "transactions_filter_state";
-    private bool filterStateLoaded;
     private DateFilterMode dateFilterMode = DateFilterMode.Monthly;
     private bool isDateMultiSelect;
     private HashSet<int> selectedYears = new();
@@ -148,9 +147,18 @@ else
     private List<int> availableYears = new();
     private List<YearMonth> availableYearMonths = new();
     private static readonly CultureInfo SwedishCulture = CultureInfo.GetCultureInfo("sv-SE");
-    private static readonly string[] FilterKeyOrder = new[] { "categorized", "uncategorized" };
     private const string CategorizedFilterKey = "categorized";
     private const string UncategorizedFilterKey = "uncategorized";
+    private const string PositiveAmountFilterKey = "amount:positive";
+    private const string NegativeAmountFilterKey = "amount:negative";
+    private const string CategoryFilterPrefix = "category:";
+    private List<FilterChipOption> filterOptions = new()
+    {
+        new FilterChipOption(CategorizedFilterKey, "Kategoriserade"),
+        new FilterChipOption(UncategorizedFilterKey, "Ej kategoriserade"),
+        new FilterChipOption(PositiveAmountFilterKey, "Positiva belopp"),
+        new FilterChipOption(NegativeAmountFilterKey, "Negativa belopp")
+    };
     private string CurrentFilterCategory => filterCategory;
     private int TotalTransactions => transactions?.Count ?? 0;
 
@@ -159,13 +167,14 @@ else
     {
         get
         {
-            var categoryFilters = ParseFilterSelection(filterCategory);
+            var selectedFilters = ParseFilterSelection(filterCategory);
+            var filterCriteria = BuildFilterCriteria(selectedFilters);
 
             return transactions?
                 .Where(tx =>
                     (string.IsNullOrWhiteSpace(searchText) ||
                      tx.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
-                    MatchesCategoryFilters(tx, categoryFilters) &&
+                    MatchesSelectionFilters(tx, filterCriteria) &&
                     MatchesDateFilter(tx))
                 .OrderByDescending(t => t.TransactionDate)
                 .ToList()
@@ -190,6 +199,7 @@ else
                 LoadCategoriesAsync(client)
             );
 
+            BuildFilterOptions();
             RefreshAvailablePeriods();
         }
         catch (Exception ex)
@@ -198,10 +208,6 @@ else
             transactions = new();
             categories = new();
             errorMessage = "Kunde inte läsa in data.";
-        }
-        finally
-        {
-            filterStateLoaded = true;
         }
     }
 
@@ -751,7 +757,7 @@ else
         return set;
     }
 
-    private static string NormalizeFilterCategory(string? value)
+    private string NormalizeFilterCategory(string? value, bool dropUnknown = false)
     {
         var parsed = ParseFilterSelection(value);
         if (parsed.Count == 0)
@@ -759,8 +765,15 @@ else
             return "all";
         }
 
-        var ordered = FilterKeyOrder.Where(parsed.Contains);
-        return string.Join(',', ordered);
+    var orderedKeys = filterOptions.Select(o => o.Key).Where(parsed.Contains).ToList();
+        var seen = new HashSet<string>(orderedKeys, StringComparer.OrdinalIgnoreCase);
+        var extras = parsed
+            .Where(k => !seen.Contains(k))
+            .OrderBy(k => k, StringComparer.OrdinalIgnoreCase);
+
+        return dropUnknown
+            ? string.Join(',', orderedKeys)
+            : string.Join(',', orderedKeys.Concat(extras));
     }
 
     private bool MatchesDateFilter(TransactionDto tx)
@@ -791,18 +804,36 @@ else
         return year == activeYear.Value && month == activeMonth.Value;
     }
 
-    private static bool MatchesCategoryFilters(TransactionDto tx, HashSet<string> filters)
+    private static bool MatchesSelectionFilters(TransactionDto tx, FilterCriteria criteria)
     {
-        if (filters.Count == 0)
-        {
-            return true;
-        }
+        var statusMatch = !criteria.HasStatusFilters ||
+            ((criteria.IncludeCategorized && tx.CategoryId != null) ||
+             (criteria.IncludeUncategorized && tx.CategoryId == null));
+        var amountMatch = !criteria.HasAmountFilters ||
+            ((criteria.IncludePositive && tx.Amount >= 0) ||
+             (criteria.IncludeNegative && tx.Amount < 0));
+        var categoryMatch = criteria.CategoryIds.Count == 0 ||
+            (tx.CategoryId is int id && criteria.CategoryIds.Contains(id));
 
-        var isCategorized = tx.CategoryId != null;
-        var matchesCategorized = isCategorized && filters.Contains(CategorizedFilterKey);
-        var matchesUncategorized = !isCategorized && filters.Contains(UncategorizedFilterKey);
+        return statusMatch && amountMatch && categoryMatch;
+    }
 
-        return matchesCategorized || matchesUncategorized;
+    private static FilterCriteria BuildFilterCriteria(HashSet<string> filters)
+    {
+        var includeCategorized = filters.Contains(CategorizedFilterKey);
+        var includeUncategorized = filters.Contains(UncategorizedFilterKey);
+        var includePositive = filters.Contains(PositiveAmountFilterKey);
+        var includeNegative = filters.Contains(NegativeAmountFilterKey);
+
+        var categoryIds = filters
+            .Where(k => k.StartsWith(CategoryFilterPrefix, StringComparison.OrdinalIgnoreCase))
+            .Select(k => k.Substring(CategoryFilterPrefix.Length))
+            .Select(id => int.TryParse(id, out var value) ? value : (int?)null)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .ToHashSet();
+
+        return new FilterCriteria(includeCategorized, includeUncategorized, includePositive, includeNegative, categoryIds);
     }
 
     private void SetFilterCategory(string category)
@@ -931,6 +962,39 @@ else
             Console.Error.WriteLine($"Fel vid uppdatering: {ex.Message}");
             errorMessage = "Kunde inte uppdatera transaktionerna efter kategorisering.";
         }
+    }
+
+    private void BuildFilterOptions()
+    {
+        var options = new List<FilterChipOption>
+        {
+            new FilterChipOption(CategorizedFilterKey, "Kategoriserade"),
+            new FilterChipOption(UncategorizedFilterKey, "Ej kategoriserade"),
+            new FilterChipOption(PositiveAmountFilterKey, "Positiva belopp"),
+            new FilterChipOption(NegativeAmountFilterKey, "Negativa belopp")
+        };
+
+        var categoryOptions = categories
+            .OrderBy(c => c.GroupDisplayName)
+            .ThenBy(c => c.SortOrder)
+            .Select(c => new FilterChipOption($"{CategoryFilterPrefix}{c.Id}", GetCategoryDisplayName(c)));
+
+        options.AddRange(categoryOptions);
+        filterOptions = options;
+        filterCategory = NormalizeFilterCategory(filterCategory, dropUnknown: true);
+        FilterState.FilterCategory = filterCategory;
+    }
+
+    private sealed record FilterCriteria(
+        bool IncludeCategorized,
+        bool IncludeUncategorized,
+        bool IncludePositive,
+        bool IncludeNegative,
+        HashSet<int> CategoryIds)
+    {
+        public bool HasStatusFilters => IncludeCategorized || IncludeUncategorized;
+        public bool HasAmountFilters => IncludePositive || IncludeNegative;
+        public bool HasCategoryFilters => CategoryIds.Count > 0;
     }
 
     private class FilterStatePayload
