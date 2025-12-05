@@ -1,0 +1,143 @@
+.transactions-filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(18, 11, 36, 0.08);
+    margin-bottom: 1.5rem;
+}
+
+.filter-bar-inner {
+    padding: 1rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.filter-primary-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.search-block {
+    flex: 1 1 220px;
+    min-width: 220px;
+}
+
+.search-input {
+    position: relative;
+}
+
+.search-input .form-control {
+    padding-left: 2.5rem;
+    border-radius: 999px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #7c7c95;
+    font-size: 1rem;
+}
+
+.filter-chip-group {
+    min-width: 220px;
+}
+
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.filter-pill {
+    border-radius: 999px;
+    border: 1px solid rgba(18, 11, 36, 0.2);
+    padding: 0.4rem 1rem;
+    background: white;
+    color: #120b24;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-pill.active {
+    background: linear-gradient(135deg, #5b2be1, #c13bdc);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 6px 14px rgba(91, 43, 225, 0.25);
+}
+
+.filter-pill.pending {
+    opacity: 0.5;
+}
+
+.filter-pill:hover:not(.active) {
+    border-color: #5b2be1;
+}
+
+.filter-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.date-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1rem;
+    box-shadow: 0 15px 35px rgba(17, 12, 31, 0.08);
+}
+
+.date-card-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.toolbar-left {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.toolbar-right {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.date-chip-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.date-chip-section .chip-row button {
+    border-radius: 999px;
+    min-width: 65px;
+}
+
+@media (max-width: 768px) {
+    .transactions-filter-bar {
+        top: -1px;
+    }
+
+    .filter-badges {
+        justify-content: flex-start;
+    }
+
+    .search-input .form-control {
+        padding-left: 2.25rem;
+    }
+}

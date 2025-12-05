@@ -1,0 +1,201 @@
+@using System.Linq
+@using PiggyzenMvp.Blazor.Services
+@namespace PiggyzenMvp.Blazor.Components.Pages.Transactions
+
+<section class="transactions-filter-bar">
+    <div class="filter-bar-inner">
+        <div class="filter-primary-row">
+            <div class="search-block">
+                @* <label class="form-label mb-1" for="transaction-search">Sök</label> *@
+                <div class="search-input">
+                    <input id="transaction-search"
+                           class="form-control"
+                           type="text"
+                           value="@SearchText"
+                           placeholder="Sök"
+                           @oninput="HandleSearchInput" />
+                    <span class="search-icon bi bi-search"></span>
+                </div>
+            </div>
+            <div class="filter-chip-group">
+                @* <label class="form-label mb-1">Filtrera</label> *@
+                <div class="chip-row">
+                    <button type="button"
+                            class="filter-pill @GetFilterClass(AllFilterKey)"
+                            @onclick="() => OnFilterCategoryChanged.InvokeAsync(AllFilterKey)">
+                        Alla
+                    </button>
+                    <button type="button"
+                            class="filter-pill @GetFilterClass(CategorizedFilterKey)"
+                            @onclick="() => OnFilterCategoryChanged.InvokeAsync(CategorizedFilterKey)">
+                        Kategoriserade
+                    </button>
+                    <button type="button"
+                            class="filter-pill @GetFilterClass(UncategorizedFilterKey)"
+                            @onclick="() => OnFilterCategoryChanged.InvokeAsync(UncategorizedFilterKey)">
+                        Ej kategoriserade
+                    </button>
+                </div>
+            </div>
+            <div class="filter-badges ms-auto">
+                <span class="badge bg-success">Kategoriserade: @CategorizedCount</span>
+                <span class="badge bg-warning text-dark">Ej kategoriserade: @UncategorizedCount</span>
+                <span class="badge bg-info text-dark">Totalt: @TotalCount</span>
+            </div>
+        </div>
+
+        <div class="date-card">
+            <div class="date-card-toolbar">
+                <div class="toolbar-left">
+                    @* <div class="fw-semibold text-uppercase small text-muted">Datumfilter</div> *@
+                    <div class="btn-group" role="group" aria-label="Datumläge">
+                        <button type="button"
+                                class="btn btn-outline-secondary @(DateFilterMode == DateFilterMode.All ? "active" : string.Empty)"
+                                @onclick="() => OnDateFilterModeChanged.InvokeAsync(DateFilterMode.All)">
+                            Alla
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary @(DateFilterMode == DateFilterMode.Yearly ? "active" : string.Empty)"
+                                @onclick="() => OnDateFilterModeChanged.InvokeAsync(DateFilterMode.Yearly)">
+                            År
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary @(DateFilterMode == DateFilterMode.Monthly ? "active" : string.Empty)"
+                                @onclick="() => OnDateFilterModeChanged.InvokeAsync(DateFilterMode.Monthly)">
+                            Månad
+                        </button>
+                    </div>
+                </div>
+                <div class="toolbar-right">
+                    <div class="btn-group" role="group" aria-label="Periodnavigation">
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                disabled="@IsPeriodNavigationDisabled"
+                                @onclick="() => OnStepPeriod.InvokeAsync(-1)">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                disabled>
+                            @CurrentPeriodLabel
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                disabled="@IsPeriodNavigationDisabled"
+                                @onclick="() => OnStepPeriod.InvokeAsync(1)">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-primary btn-sm ms-2"
+                            disabled="@IsDateControlsDisabled"
+                            @onclick="() => OnToggleDateMultiSelect.InvokeAsync()">
+                        @(IsDateMultiSelect ? "Multi på" : "Multi av")
+                    </button>
+                    <button type="button"
+                            class="btn btn-link text-decoration-none btn-sm"
+                            disabled="@IsDateControlsDisabled"
+                            @onclick="() => OnClearDateFilters.InvokeAsync()">
+                        Rensa filter
+                    </button>
+                </div>
+            </div>
+
+            @if (DateFilterMode == DateFilterMode.All)
+            {
+                <div class="text-muted small">Alla datum visas.</div>
+            }
+            else if (DateFilterMode == DateFilterMode.Yearly)
+            {
+                <div class="date-chip-section">
+                    <span class="text-muted text-uppercase small fw-semibold">År</span>
+                    <div class="chip-row">
+                        @foreach (var year in YearOptions)
+                        {
+                            <button type="button"
+                                    class="@GetYearButtonClass(year)"
+                                    @onclick="() => OnYearSelectionToggled.InvokeAsync(year)">
+                                @year
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+            else if (DateFilterMode == DateFilterMode.Monthly)
+            {
+                <div class="date-chip-section">
+                    @* <span class="text-muted text-uppercase small fw-semibold">Period</span> *@
+                    <div class="chip-row">
+                        @foreach (var option in MonthOptions)
+                        {
+                            <button type="button"
+                                    class="@GetMonthButtonClass(option)"
+                                    @onclick="() => OnMonthSelectionToggled.InvokeAsync(option)">
+                                @GetMonthLabel(option)
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter] public string? SearchText { get; set; }
+    [Parameter] public EventCallback<string?> OnSearchTextChanged { get; set; }
+    [Parameter] public string? FilterCategory { get; set; }
+    [Parameter] public bool FilterStateLoaded { get; set; }
+    [Parameter] public EventCallback<string> OnFilterCategoryChanged { get; set; }
+    [Parameter] public int CategorizedCount { get; set; }
+    [Parameter] public int UncategorizedCount { get; set; }
+    [Parameter] public int TotalCount { get; set; }
+
+    [Parameter] public DateFilterMode DateFilterMode { get; set; }
+    [Parameter] public bool IsDateMultiSelect { get; set; }
+    [Parameter] public bool IsDateControlsDisabled { get; set; }
+    [Parameter] public bool IsPeriodNavigationDisabled { get; set; }
+    [Parameter] public string CurrentPeriodLabel { get; set; } = "Alla datum";
+    [Parameter] public EventCallback<DateFilterMode> OnDateFilterModeChanged { get; set; }
+    [Parameter] public EventCallback OnToggleDateMultiSelect { get; set; }
+    [Parameter] public EventCallback OnClearDateFilters { get; set; }
+    [Parameter] public EventCallback<int> OnStepPeriod { get; set; }
+
+    [Parameter] public IEnumerable<int> YearOptions { get; set; } = Enumerable.Empty<int>();
+    [Parameter] public IEnumerable<YearMonth> MonthOptions { get; set; } = Enumerable.Empty<YearMonth>();
+    [Parameter] public EventCallback<int> OnYearSelectionToggled { get; set; }
+    [Parameter] public EventCallback<YearMonth> OnMonthSelectionToggled { get; set; }
+    [Parameter] public Func<int, string>? YearButtonClassSelector { get; set; }
+    [Parameter] public Func<YearMonth, string>? MonthButtonClassSelector { get; set; }
+    [Parameter] public Func<YearMonth, string>? MonthLabelSelector { get; set; }
+
+    private const string AllFilterKey = "all";
+    private const string CategorizedFilterKey = "categorized";
+    private const string UncategorizedFilterKey = "uncategorized";
+
+    private Task HandleSearchInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? string.Empty;
+        return OnSearchTextChanged.InvokeAsync(value);
+    }
+
+    private string GetFilterClass(string category)
+    {
+        if (!FilterStateLoaded)
+        {
+            return "pending";
+        }
+
+        var active = (FilterCategory ?? "all").Equals(category, StringComparison.OrdinalIgnoreCase);
+        return active ? "active" : string.Empty;
+    }
+
+    private string GetYearButtonClass(int year) =>
+        YearButtonClassSelector?.Invoke(year) ?? "btn btn-sm btn-outline-secondary";
+
+    private string GetMonthButtonClass(YearMonth option) =>
+        MonthButtonClassSelector?.Invoke(option) ?? "btn btn-sm btn-outline-secondary";
+
+    private string GetMonthLabel(YearMonth option) =>
+        MonthLabelSelector?.Invoke(option) ?? $"{option.Year}-{option.Month:D2}";
+}
