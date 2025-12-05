@@ -55,8 +55,18 @@
 
                         <div class="tag-section">
                             <div class="tag-palette">
-                                @foreach (var chip in filterSection.Options.Where(o => !IsFilterActive(o.Key)))
+                                @foreach (var chip in filterSection.Options)
                                 {
+                                    if (IsHiddenByParent(chip))
+                                    {
+                                        continue;
+                                    }
+
+                                    if (IsFilterActive(chip.Key))
+                                    {
+                                        continue;
+                                    }
+
                                     <button type="button"
                                             class="tag-option"
                                             @onclick="() => ToggleFilter(chip.Key)">
@@ -222,6 +232,9 @@
     }
 
     private bool IsFilterActive(string key) => selectedFilterKeys.Contains(key);
+
+    private bool IsHiddenByParent(FilterChipOption option) =>
+        option.ParentKey is not null && selectedFilterKeys.Contains(option.ParentKey);
 
     private Task ToggleFilter(string key)
     {

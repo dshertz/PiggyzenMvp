@@ -1013,7 +1013,7 @@ else
 
             foreach (var category in group.OrderBy(c => c.SortOrder))
             {
-                sectionOptions.Add(new FilterChipOption($"{CategoryFilterPrefix}{category.Id}", category.EffectiveName));
+                sectionOptions.Add(new FilterChipOption($"{CategoryFilterPrefix}{category.Id}", category.EffectiveName, groupKey));
             }
 
             groupCategoryMap[groupKey] = group.Select(c => c.Id).ToHashSet();
