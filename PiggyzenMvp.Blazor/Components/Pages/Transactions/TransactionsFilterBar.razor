@@ -42,20 +42,32 @@
                         }
                     </div>
                 }
-                @if (filtersExpanded)
-                {
-                    <div class="tag-palette">
-                        @foreach (var option in FilterOptions.Where(o => !IsFilterActive(o.Key)))
-                        {
-                            <button type="button"
-                                    class="tag-option"
-                                    @onclick="() => ToggleFilter(option.Key)">
-                                @option.Label
-                            </button>
-                        }
-                    </div>
-                }
             </div>
+            @if (filtersExpanded)
+            {
+                <div class="tag-sections">
+                    @foreach (var filterSection in FilterSections)
+                    {
+                        if (filterSection.Options.Count == 0)
+                        {
+                            continue;
+                        }
+
+                        <div class="tag-section">
+                            <div class="tag-palette">
+                                @foreach (var chip in filterSection.Options.Where(o => !IsFilterActive(o.Key)))
+                                {
+                                    <button type="button"
+                                            class="tag-option"
+                                            @onclick="() => ToggleFilter(chip.Key)">
+                                        @chip.Label
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
         </div>
 
         <div class="date-controls-block">
@@ -179,7 +191,7 @@
     [Parameter] public Func<int, string>? YearButtonClassSelector { get; set; }
     [Parameter] public Func<YearMonth, string>? MonthButtonClassSelector { get; set; }
     [Parameter] public Func<YearMonth, string>? MonthLabelSelector { get; set; }
-    [Parameter] public IReadOnlyList<FilterChipOption> FilterOptions { get; set; } = Array.Empty<FilterChipOption>();
+    [Parameter] public IReadOnlyList<FilterChipSection> FilterSections { get; set; } = Array.Empty<FilterChipSection>();
 
     private bool filtersExpanded = true;
     private bool isSelectorOpen;
@@ -193,7 +205,9 @@
 
     protected override void OnParametersSet()
     {
-        filterOrder = FilterOptions?.ToList() ?? new List<FilterChipOption>();
+        filterOrder = FilterSections?
+            .SelectMany(section => section.Options)
+            .ToList() ?? new List<FilterChipOption>();
         selectedFilterKeys = ParseFilterValues(FilterCategory);
         if (DateFilterMode == DateFilterMode.All && isSelectorOpen)
         {

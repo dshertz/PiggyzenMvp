@@ -11,7 +11,7 @@
 
 <TransactionsFilterBar SearchText="@searchText"
                        FilterCategory="@CurrentFilterCategory"
-                       FilterOptions="@filterOptions"
+                       FilterSections="@filterSections"
                        OnSearchTextChanged="UpdateSearchTextAsync"
                        OnFilterCategoryChanged="SetFilterCategory"
                        DateFilterMode="@dateFilterMode"
@@ -152,13 +152,13 @@ else
     private const string PositiveAmountFilterKey = "amount:positive";
     private const string NegativeAmountFilterKey = "amount:negative";
     private const string CategoryFilterPrefix = "category:";
-    private List<FilterChipOption> filterOptions = new()
+    private const string GroupFilterPrefix = "group:";
+    private List<FilterChipSection> filterSections = new()
     {
-        new FilterChipOption(CategorizedFilterKey, "Kategoriserade"),
-        new FilterChipOption(UncategorizedFilterKey, "Ej kategoriserade"),
-        new FilterChipOption(PositiveAmountFilterKey, "Positiva belopp"),
-        new FilterChipOption(NegativeAmountFilterKey, "Negativa belopp")
+        new FilterChipSection(null, CreateBaseFilterOptions())
     };
+    private List<FilterChipOption> filterOptionOrder = CreateBaseFilterOptions();
+    private Dictionary<string, HashSet<int>> groupCategoryMap = new(StringComparer.OrdinalIgnoreCase);
     private string CurrentFilterCategory => filterCategory;
     private int TotalTransactions => transactions?.Count ?? 0;
 
@@ -199,7 +199,7 @@ else
                 LoadCategoriesAsync(client)
             );
 
-            BuildFilterOptions();
+            BuildFilterSections();
             RefreshAvailablePeriods();
         }
         catch (Exception ex)
@@ -765,7 +765,7 @@ else
             return "all";
         }
 
-    var orderedKeys = filterOptions.Select(o => o.Key).Where(parsed.Contains).ToList();
+        var orderedKeys = filterOptionOrder.Select(o => o.Key).Where(parsed.Contains).ToList();
         var seen = new HashSet<string>(orderedKeys, StringComparer.OrdinalIgnoreCase);
         var extras = parsed
             .Where(k => !seen.Contains(k))
@@ -818,20 +818,33 @@ else
         return statusMatch && amountMatch && categoryMatch;
     }
 
-    private static FilterCriteria BuildFilterCriteria(HashSet<string> filters)
+    private FilterCriteria BuildFilterCriteria(HashSet<string> filters)
     {
         var includeCategorized = filters.Contains(CategorizedFilterKey);
         var includeUncategorized = filters.Contains(UncategorizedFilterKey);
         var includePositive = filters.Contains(PositiveAmountFilterKey);
         var includeNegative = filters.Contains(NegativeAmountFilterKey);
 
-        var categoryIds = filters
-            .Where(k => k.StartsWith(CategoryFilterPrefix, StringComparison.OrdinalIgnoreCase))
-            .Select(k => k.Substring(CategoryFilterPrefix.Length))
-            .Select(id => int.TryParse(id, out var value) ? value : (int?)null)
-            .Where(id => id.HasValue)
-            .Select(id => id!.Value)
-            .ToHashSet();
+        var categoryIds = new HashSet<int>();
+        foreach (var key in filters)
+        {
+            if (key.StartsWith(CategoryFilterPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var raw = key.Substring(CategoryFilterPrefix.Length);
+                if (int.TryParse(raw, out var parsed))
+                {
+                    categoryIds.Add(parsed);
+                }
+            }
+            else if (key.StartsWith(GroupFilterPrefix, StringComparison.OrdinalIgnoreCase) &&
+                     groupCategoryMap.TryGetValue(key, out var ids))
+            {
+                foreach (var id in ids)
+                {
+                    categoryIds.Add(id);
+                }
+            }
+        }
 
         return new FilterCriteria(includeCategorized, includeUncategorized, includePositive, includeNegative, categoryIds);
     }
@@ -963,24 +976,52 @@ else
             errorMessage = "Kunde inte uppdatera transaktionerna efter kategorisering.";
         }
     }
-
-    private void BuildFilterOptions()
+    
+    private static List<FilterChipOption> CreateBaseFilterOptions() => new()
     {
-        var options = new List<FilterChipOption>
+        new FilterChipOption(CategorizedFilterKey, "Kategoriserade"),
+        new FilterChipOption(UncategorizedFilterKey, "Ej kategoriserade"),
+        new FilterChipOption(PositiveAmountFilterKey, "Positiva belopp"),
+        new FilterChipOption(NegativeAmountFilterKey, "Negativa belopp")
+    };
+
+    private void BuildFilterSections()
+    {
+        groupCategoryMap = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
+
+        var sections = new List<FilterChipSection>();
+        var baseSectionOptions = CreateBaseFilterOptions();
+        sections.Add(new FilterChipSection(null, baseSectionOptions));
+
+        var groupedCategories = categories
+            .GroupBy(c => c.GroupId)
+            .OrderBy(g => g.First().GroupDisplayName)
+            .ToList();
+
+        foreach (var group in groupedCategories)
         {
-            new FilterChipOption(CategorizedFilterKey, "Kategoriserade"),
-            new FilterChipOption(UncategorizedFilterKey, "Ej kategoriserade"),
-            new FilterChipOption(PositiveAmountFilterKey, "Positiva belopp"),
-            new FilterChipOption(NegativeAmountFilterKey, "Negativa belopp")
-        };
+            var representative = group.First();
+            var groupLabel = string.IsNullOrWhiteSpace(representative.GroupDisplayName)
+                ? "Övrigt"
+                : representative.GroupDisplayName;
+            var groupKey = $"{GroupFilterPrefix}{representative.GroupId}";
 
-        var categoryOptions = categories
-            .OrderBy(c => c.GroupDisplayName)
-            .ThenBy(c => c.SortOrder)
-            .Select(c => new FilterChipOption($"{CategoryFilterPrefix}{c.Id}", GetCategoryDisplayName(c)));
+            var sectionOptions = new List<FilterChipOption>
+            {
+                new FilterChipOption(groupKey, groupLabel)
+            };
 
-        options.AddRange(categoryOptions);
-        filterOptions = options;
+            foreach (var category in group.OrderBy(c => c.SortOrder))
+            {
+                sectionOptions.Add(new FilterChipOption($"{CategoryFilterPrefix}{category.Id}", category.EffectiveName));
+            }
+
+            groupCategoryMap[groupKey] = group.Select(c => c.Id).ToHashSet();
+            sections.Add(new FilterChipSection(null, sectionOptions));
+        }
+
+        filterSections = sections;
+        filterOptionOrder = sections.SelectMany(s => s.Options).ToList();
         filterCategory = NormalizeFilterCategory(filterCategory, dropUnknown: true);
         FilterState.FilterCategory = filterCategory;
     }
