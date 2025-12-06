@@ -637,7 +637,7 @@ else
     {
         var date = new DateTime(option.Year, option.Month, 1);
         var monthAbbreviation = date.ToString("MMM", SwedishCulture).TrimEnd('.');
-        return $"{date:yyyy} {monthAbbreviation.ToLower(SwedishCulture)}.";
+        return monthAbbreviation.ToLower(SwedishCulture);
     }
 
     private void RefreshAvailablePeriods()

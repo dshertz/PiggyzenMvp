@@ -90,6 +90,49 @@
     min-width: 65px;
 }
 
+.month-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.month-group {
+    border: 1px solid rgba(18, 11, 36, 0.15);
+    border-radius: 10px;
+    padding: 0.5rem 0.75rem 0.75rem;
+    background: #fff;
+}
+
+.month-group-header {
+    font-weight: 600;
+    font-size: 1rem;
+    text-align: center;
+    margin-bottom: 0.3rem;
+}
+
+.month-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.35rem;
+}
+
+.month-grid button {
+    width: 100%;
+    border-radius: 4px;
+    border: 1px solid rgba(18, 11, 36, 0.2);
+    padding: 0.4rem 0.2rem;
+    background: #fafafa;
+    font-size: 0.85rem;
+    text-transform: lowercase;
+}
+
+.month-grid button.active {
+    background: #120b24;
+    color: #fff;
+    border-color: #120b24;
+}
+
 .current-period-label {
     font-weight: 500;
 }
@@ -104,5 +147,13 @@
 @media (max-width: 768px) {
     .current-period-btn {
         width: 100%;
+    }
+
+    .month-groups {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .month-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }

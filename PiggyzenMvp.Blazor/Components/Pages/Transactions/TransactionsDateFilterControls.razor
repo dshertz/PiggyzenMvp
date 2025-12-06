@@ -82,14 +82,24 @@
             }
             else if (DateFilterMode == DateFilterMode.Monthly)
             {
-                <div class="chip-row">
-                    @foreach (var option in MonthOptions)
+                <div class="month-groups">
+                    @foreach (var group in MonthOptions
+                        .GroupBy(option => option.Year)
+                        .OrderByDescending(g => g.Key))
                     {
-                        <button type="button"
-                                class="@GetMonthButtonClass(option)"
-                                @onclick="() => OnMonthSelectionToggled.InvokeAsync(option)">
-                            @GetMonthLabel(option)
-                        </button>
+                        <div class="month-group">
+                            <div class="month-group-header">@group.Key</div>
+                            <div class="month-grid">
+                                @foreach (var option in group.OrderBy(o => o.Month))
+                                {
+                                    <button type="button"
+                                            class="@GetMonthButtonClass(option)"
+                                            @onclick="() => OnMonthSelectionToggled.InvokeAsync(option)">
+                                        @GetMonthLabel(option)
+                                    </button>
+                                }
+                            </div>
+                        </div>
                     }
                 </div>
             }
