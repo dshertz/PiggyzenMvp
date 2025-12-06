@@ -211,7 +211,7 @@
     [Parameter] public Func<YearMonth, string>? MonthLabelSelector { get; set; }
     [Parameter] public IReadOnlyList<FilterChipSection> FilterSections { get; set; } = Array.Empty<FilterChipSection>();
 
-    private bool filtersExpanded = true;
+    private bool filtersExpanded = false;
     private bool categoriesCollapsed = true;
     private bool showCategorySearch;
     private string categorySearchText = string.Empty;
