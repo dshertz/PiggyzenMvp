@@ -81,21 +81,21 @@ else if (FilteredTransactions.Count == 0)
 }
 else
 {
-    <table class="table table-bordered table-striped">
+    <table class="table table-bordered table-striped transactions-table">
         <thead>
             <tr>
-                <th style="width: 48px;">
+                <th class="col-select text-center align-middle">
                     <input type="checkbox"
-                           class="form-check-input"
+                           class="form-check-input select-checkbox"
                            @onchange="ToggleSelectAllFiltered"
                            checked="@AreAllFilteredSelected" />
                 </th>
-                <th>Datum</th>
+                <th class="col-date">Datum</th>
                 <th>Beskrivning</th>
-                <th>Belopp</th>
-                <th>Saldo</th>
-                <th>Type</th>
-                <th>Category</th>
+                <th class="col-amount text-end">Belopp</th>
+                <th class="col-balance text-end">Saldo</th>
+                <th>Group</th>
+                <th class="col-category">Kategori</th>
             </tr>
         </thead>
         <tbody>
@@ -104,14 +104,14 @@ else
                 <tr @key="tx.Id">
                     <td class="text-center">
                         <input type="checkbox"
-                               class="form-check-input"
+                               class="form-check-input select-checkbox"
                                checked="@IsSelected(tx.Id)"
                                @onchange="e => ToggleSelection(tx.Id, e)" />
                     </td>
                     <td>@tx.TransactionDate.ToShortDateString()</td>
                     <td>@tx.Description</td>
-                    <td>@tx.Amount.ToString("F2")</td>
-                    <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
+                    <td class="text-end">@tx.Amount.ToString("F2")</td>
+                    <td class="text-end">@(tx.Balance?.ToString("F2") ?? "-")</td>
                     <td>@(tx.TypeName ?? "—")</td>
                     <td>@(tx.CategoryName ?? "Ej vald")</td>
                 </tr>
