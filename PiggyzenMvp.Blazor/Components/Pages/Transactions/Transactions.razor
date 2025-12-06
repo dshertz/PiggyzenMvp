@@ -578,6 +578,7 @@ else
         }
 
         EnsurePeriodSelectionIsValid();
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -616,6 +617,7 @@ else
             }
         }
 
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -634,6 +636,7 @@ else
             activeYear = year;
         }
 
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -653,6 +656,7 @@ else
             activeMonth = option.Month;
         }
 
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -683,6 +687,7 @@ else
             }
         }
 
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -700,6 +705,7 @@ else
         selectedYearMonths.Clear();
         EnsurePeriodSelectionIsValid();
 
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -738,6 +744,7 @@ else
         }
 
         EnsurePeriodSelectionIsValid();
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -1013,12 +1020,14 @@ else
     private void SetFilterCategory(string category)
     {
         filterCategory = NormalizeFilterCategory(category);
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
     private async Task UpdateSearchTextAsync(string? value)
     {
         searchText = value ?? string.Empty;
+        PruneSelection();
         await SaveFilterStateAsync();
     }
 
@@ -1194,6 +1203,17 @@ else
         filterOptionOrder = sections.SelectMany(s => s.Options).ToList();
         filterCategory = NormalizeFilterCategory(filterCategory, dropUnknown: true);
         FilterState.FilterCategory = filterCategory;
+    }
+
+    private void PruneSelection()
+    {
+        if (transactions is null || selectedTransactionIds.Count == 0)
+        {
+            return;
+        }
+
+        var filteredIds = FilteredTransactions.Select(t => t.Id).ToHashSet();
+        selectedTransactionIds.RemoveWhere(id => !filteredIds.Contains(id));
     }
 
     private sealed record BulkCategoryGroupModel(string DisplayName, List<CategoryDto> Categories);
