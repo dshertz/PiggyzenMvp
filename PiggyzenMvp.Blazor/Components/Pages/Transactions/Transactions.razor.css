@@ -112,8 +112,31 @@
     width: 100%;
     border-radius: 999px;
     border: 1px solid rgba(18, 11, 36, 0.15);
-    padding: 0.45rem 1rem;
+    padding: 0.45rem 2.2rem 0.45rem 1rem;
     font-size: 0.95rem;
+}
+
+.bulk-category-search {
+    position: relative;
+}
+
+.bulk-category-search-clear {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: #7c7c95;
+    font-size: 1.05rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bulk-category-search-clear.invisible {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .bulk-category-list {

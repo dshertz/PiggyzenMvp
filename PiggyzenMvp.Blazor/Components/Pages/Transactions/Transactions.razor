@@ -69,13 +69,20 @@
             </div>
         </div>
         <div class="bulk-categorization-menu-wrapper">
-            <div class="bulk-categorization-menu">
-                <div class="bulk-category-search">
-                    <input class="bulk-category-search-input"
-                           placeholder="Sök kategori…"
-                           value="@bulkCategorySearchText"
-                           @oninput="OnBulkCategorySearchInput" />
-                </div>
+                <div class="bulk-categorization-menu">
+                    <div class="bulk-category-search">
+                        <input class="bulk-category-search-input"
+                               placeholder="Sök kategori…"
+                               value="@bulkCategorySearchText"
+                               @oninput="OnBulkCategorySearchInput" />
+                        <button type="button"
+                                class="bulk-category-search-clear @(string.IsNullOrWhiteSpace(bulkCategorySearchText) ? "invisible" : string.Empty)"
+                                title="Rensa söktext"
+                                aria-label="Rensa söktext"
+                                @onclick="ClearBulkCategorySearch">
+                            <span class="bi bi-x-circle"></span>
+                        </button>
+                    </div>
                 @{
                     var filteredGroups = GetFilteredBulkCategoryGroups().ToList();
                 }
@@ -319,6 +326,16 @@ else
     private void SelectBulkCategory(int categoryId)
     {
         bulkCategoryId = bulkCategoryId == categoryId ? null : categoryId;
+    }
+
+    private void ClearBulkCategorySearch()
+    {
+        if (string.IsNullOrWhiteSpace(bulkCategorySearchText))
+        {
+            return;
+        }
+
+        bulkCategorySearchText = string.Empty;
     }
 
     private IEnumerable<BulkCategoryGroupModel> GetFilteredBulkCategoryGroups()

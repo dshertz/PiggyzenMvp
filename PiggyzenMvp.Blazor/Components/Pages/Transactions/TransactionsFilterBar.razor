@@ -21,6 +21,13 @@
                        placeholder="Sök transaktioner"
                        @oninput="HandleSearchInput" />
                 <span class="search-icon bi bi-search"></span>
+                <button type="button"
+                        class="search-clear-btn @(string.IsNullOrWhiteSpace(SearchText) ? "invisible" : string.Empty)"
+                        title="Rensa söktext"
+                        aria-label="Rensa söktext"
+                        @onclick="ClearSearch">
+                    <span class="bi bi-x-circle"></span>
+                </button>
             </div>
         </div>
 
@@ -90,6 +97,13 @@
                                    value="@categorySearchText"
                                    @oninput="OnCategorySearchInput"
                                    @onkeydown="OnCategorySearchKeyDown" />
+                            <button type="button"
+                                    class="category-search-clear @(string.IsNullOrWhiteSpace(categorySearchText) ? "invisible" : string.Empty)"
+                                    title="Rensa söktext"
+                                    aria-label="Rensa söktext"
+                                    @onclick="ClearCategorySearch">
+                                <span class="bi bi-x-circle"></span>
+                            </button>
                             <div class="category-search-results">
                                 @if (!FilteredCategoryOptions.Any())
                                 {
@@ -244,6 +258,16 @@
         return OnSearchTextChanged.InvokeAsync(value);
     }
 
+    private Task ClearSearch()
+    {
+        if (string.IsNullOrWhiteSpace(SearchText))
+        {
+            return Task.CompletedTask;
+        }
+
+        return OnSearchTextChanged.InvokeAsync(string.Empty);
+    }
+
     private bool IsFilterActive(string key) => selectedFilterKeys.Contains(key);
 
     private bool IsHiddenByParent(FilterChipOption option) =>
@@ -283,6 +307,17 @@
     private void OnCategorySearchInput(ChangeEventArgs e)
     {
         categorySearchText = e.Value?.ToString() ?? string.Empty;
+        highlightedCategoryIndex = 0;
+    }
+
+    private void ClearCategorySearch()
+    {
+        if (string.IsNullOrWhiteSpace(categorySearchText))
+        {
+            return;
+        }
+
+        categorySearchText = string.Empty;
         highlightedCategoryIndex = 0;
     }
 
