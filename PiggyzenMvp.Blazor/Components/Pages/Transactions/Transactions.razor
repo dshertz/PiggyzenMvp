@@ -44,29 +44,66 @@
 
 @if (selectedTransactionIds.Count > 0)
 {
-    <div class="alert alert-info d-flex flex-column flex-md-row align-items-md-end gap-3" role="alert">
-        <div>
-            <strong>@selectedTransactionIds.Count</strong> transaktion(er) markerade.
-        </div>
-        <div class="flex-grow-1">
-            <label class="form-label mb-1">Välj kategori</label>
-            <select class="form-select form-select-sm"
-                    value="@GetSelectedBulkCategoryValue()"
-                    @onchange="OnBulkCategoryChanged">
-                <option value="">— Välj kategori —</option>
-                @foreach (var category in categories)
+    <div class="alert alert-info bulk-categorization" role="alert">
+        <div class="bulk-categorization-header">
+            <div class="bulk-categorization-summary">
+                <div>
+                    <strong>@selectedTransactionIds.Count</strong> transaktion(er) markerade.
+                </div>
+                @if (GetSelectedBulkCategoryName() is { } selectedLabel)
                 {
-                    <option value="@category.Id">@GetCategoryDisplayName(category)</option>
+                    <div class="bulk-categorization-current">
+                        Vald kategori: <span>@selectedLabel</span>
+                    </div>
                 }
-            </select>
+            </div>
+            <div class="bulk-categorization-actions">
+                <button class="btn btn-primary"
+                        @onclick="CategorizeSelectedAsync"
+                        disabled="@IsBulkActionDisabled">
+                    @(isBulkCategorizing ? "Kategoriserar..." : $"Kategorisera {selectedTransactionIds.Count}")
+                </button>
+                <button class="btn btn-link text-decoration-none" type="button" @onclick="ClearSelection">
+                    Rensa markering
+                </button>
+            </div>
         </div>
-        <div class="d-flex flex-wrap gap-2">
-            <button class="btn btn-primary"
-                    @onclick="CategorizeSelectedAsync"
-                    disabled="@IsBulkActionDisabled">
-                @(isBulkCategorizing ? "Kategoriserar..." : $"Kategorisera {selectedTransactionIds.Count}")
-            </button>
-            <button class="btn btn-link text-decoration-none" type="button" @onclick="ClearSelection">Rensa markering</button>
+        <div class="bulk-categorization-menu-wrapper">
+            <div class="bulk-categorization-menu">
+                <div class="bulk-category-search">
+                    <input class="bulk-category-search-input"
+                           placeholder="Sök kategori…"
+                           value="@bulkCategorySearchText"
+                           @oninput="OnBulkCategorySearchInput" />
+                </div>
+                @{
+                    var filteredGroups = GetFilteredBulkCategoryGroups().ToList();
+                }
+                <div class="bulk-category-list">
+                    @if (filteredGroups.Count == 0)
+                    {
+                        <div class="bulk-category-empty">Inga kategorier matchar din sökning.</div>
+                    }
+                    else
+                    {
+                        @foreach (var group in filteredGroups)
+                        {
+                            <section class="bulk-category-list-group">
+                                <header class="bulk-category-list-group-title">@group.DisplayName</header>
+                                @foreach (var category in group.Categories)
+                                {
+                                    var isActive = bulkCategoryId == category.Id;
+                                    <button type="button"
+                                            class="bulk-category-list-item @(isActive ? "active" : string.Empty)"
+                                            @onclick="() => SelectBulkCategory(category.Id)">
+                                        @category.EffectiveName
+                                    </button>
+                                }
+                            </section>
+                        }
+                    }
+                </div>
+            </div>
         </div>
     </div>
 }
@@ -146,6 +183,7 @@ else
     private HashSet<YearMonth> selectedYearMonths = new();
     private int? activeYear;
     private int? activeMonth;
+    private string bulkCategorySearchText = string.Empty;
     private List<int> availableYears = new();
     private List<YearMonth> availableYearMonths = new();
     private static readonly CultureInfo SwedishCulture = CultureInfo.GetCultureInfo("sv-SE");
@@ -218,8 +256,16 @@ else
             ? category.EffectiveName
             : $"{category.GroupDisplayName} / {category.EffectiveName}";
 
-    private string GetSelectedBulkCategoryValue() =>
-        bulkCategoryId?.ToString() ?? string.Empty;
+    private string? GetSelectedBulkCategoryName()
+    {
+        if (bulkCategoryId is not int id)
+        {
+            return null;
+        }
+
+        var category = categories.FirstOrDefault(c => c.Id == id);
+        return category is null ? null : GetCategoryDisplayName(category);
+    }
 
     private bool AreAllFilteredSelected
     {
@@ -265,16 +311,39 @@ else
         }
     }
 
-    private void OnBulkCategoryChanged(ChangeEventArgs e)
+    private void OnBulkCategorySearchInput(ChangeEventArgs e)
     {
-        var rawValue = e.Value?.ToString();
-        if (string.IsNullOrWhiteSpace(rawValue))
+        bulkCategorySearchText = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private void SelectBulkCategory(int categoryId)
+    {
+        bulkCategoryId = bulkCategoryId == categoryId ? null : categoryId;
+    }
+
+    private IEnumerable<BulkCategoryGroupModel> GetFilteredBulkCategoryGroups()
+    {
+        var groups = categoryGroups
+            .Select(g => new BulkCategoryGroupModel(
+                string.IsNullOrWhiteSpace(g.DisplayName) ? "Övrigt" : g.DisplayName,
+                g.Categories))
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(bulkCategorySearchText))
         {
-            bulkCategoryId = null;
-            return;
+            return groups;
         }
 
-        bulkCategoryId = int.TryParse(rawValue, out var value) ? value : null;
+        var query = bulkCategorySearchText.Trim();
+        return groups
+            .Select(g => new BulkCategoryGroupModel(
+                g.DisplayName,
+                g.Categories
+                    .Where(c =>
+                        c.EffectiveName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        (c.GroupDisplayName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                    .ToList()))
+            .Where(g => g.Categories.Count > 0);
     }
 
     private bool IsBulkActionDisabled =>
@@ -1109,6 +1178,8 @@ else
         filterCategory = NormalizeFilterCategory(filterCategory, dropUnknown: true);
         FilterState.FilterCategory = filterCategory;
     }
+
+    private sealed record BulkCategoryGroupModel(string DisplayName, List<CategoryDto> Categories);
 
     private sealed record FilterCriteria(
         bool IncludeCategorized,
