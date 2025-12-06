@@ -1,0 +1,168 @@
+@using System.Linq
+@using PiggyzenMvp.Blazor.Services
+@namespace PiggyzenMvp.Blazor.Components.Pages.Transactions
+
+<div class="date-controls-block">
+    <div class="date-controls-row">
+        <div class="mode-buttons">
+            <button type="button"
+                    class="mode-btn @(DateFilterMode == DateFilterMode.All ? "active" : string.Empty)"
+                    @onclick="() => ChangeMode(DateFilterMode.All)">
+                Alla datum
+            </button>
+            <button type="button"
+                    class="mode-btn @(DateFilterMode == DateFilterMode.Yearly ? "active" : string.Empty)"
+                    @onclick="() => ChangeMode(DateFilterMode.Yearly)">
+                År
+            </button>
+            <button type="button"
+                    class="mode-btn @(DateFilterMode == DateFilterMode.Monthly ? "active" : string.Empty)"
+                    @onclick="() => ChangeMode(DateFilterMode.Monthly)">
+                Månad
+            </button>
+        </div>
+
+        <div class="period-actions">
+            <button type="button"
+                    class="nav-btn"
+                    disabled="@IsPeriodNavigationDisabled"
+                    @onclick="() => OnStepPeriod.InvokeAsync(-1)">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+            <button type="button"
+                    class="current-period-btn"
+                    disabled="@IsDateControlsDisabled"
+                    @onclick="ToggleSelector">
+                <span class="current-period-label">@CurrentPeriodLabel</span>
+                @if (IsDateMultiSelect)
+                {
+                    <span class="current-period-meta">Multi</span>
+                }
+                <span class="bi @(showSelector ? "bi-chevron-up" : "bi-chevron-down")"></span>
+            </button>
+            <button type="button"
+                    class="nav-btn"
+                    disabled="@IsPeriodNavigationDisabled"
+                    @onclick="() => OnStepPeriod.InvokeAsync(1)">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+
+        <div class="date-utility-buttons">
+            <button type="button"
+                    class="pill-btn"
+                    disabled="@IsDateControlsDisabled"
+                    @onclick="() => OnToggleDateMultiSelect.InvokeAsync()">
+                @(IsDateMultiSelect ? "Multi på" : "Multi av")
+            </button>
+            <button type="button"
+                    class="pill-btn secondary"
+                    disabled="@IsDateControlsDisabled"
+                    @onclick="() => OnClearDateFilters.InvokeAsync()">
+                Rensa
+            </button>
+        </div>
+    </div>
+
+    @if (showSelector)
+    {
+        <div class="period-selector">
+            @if (DateFilterMode == DateFilterMode.Yearly)
+            {
+                <div class="chip-row">
+                    @foreach (var year in YearOptions)
+                    {
+                        <button type="button"
+                                class="@GetYearButtonClass(year)"
+                                @onclick="() => OnYearSelectionToggled.InvokeAsync(year)">
+                            @year
+                        </button>
+                    }
+                </div>
+            }
+            else if (DateFilterMode == DateFilterMode.Monthly)
+            {
+                <div class="chip-row">
+                    @foreach (var option in MonthOptions)
+                    {
+                        <button type="button"
+                                class="@GetMonthButtonClass(option)"
+                                @onclick="() => OnMonthSelectionToggled.InvokeAsync(option)">
+                            @GetMonthLabel(option)
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public DateFilterMode DateFilterMode { get; set; }
+    [Parameter] public bool IsDateMultiSelect { get; set; }
+    [Parameter] public bool IsDateControlsDisabled { get; set; }
+    [Parameter] public bool IsPeriodNavigationDisabled { get; set; }
+    [Parameter] public string CurrentPeriodLabel { get; set; } = "Alla datum";
+    [Parameter] public EventCallback<DateFilterMode> OnDateFilterModeChanged { get; set; }
+    [Parameter] public EventCallback OnToggleDateMultiSelect { get; set; }
+    [Parameter] public EventCallback OnClearDateFilters { get; set; }
+    [Parameter] public EventCallback<int> OnStepPeriod { get; set; }
+    [Parameter] public IEnumerable<int> YearOptions { get; set; } = Enumerable.Empty<int>();
+    [Parameter] public IEnumerable<YearMonth> MonthOptions { get; set; } = Enumerable.Empty<YearMonth>();
+    [Parameter] public EventCallback<int> OnYearSelectionToggled { get; set; }
+    [Parameter] public EventCallback<YearMonth> OnMonthSelectionToggled { get; set; }
+    [Parameter] public Func<int, string>? YearButtonClassSelector { get; set; }
+    [Parameter] public Func<YearMonth, string>? MonthButtonClassSelector { get; set; }
+    [Parameter] public Func<YearMonth, string>? MonthLabelSelector { get; set; }
+
+    private bool isSelectorOpen;
+    private bool showSelector => isSelectorOpen && DateFilterMode != DateFilterMode.All && !IsDateControlsDisabled;
+
+    protected override void OnParametersSet()
+    {
+        if (DateFilterMode == DateFilterMode.All || IsDateControlsDisabled)
+        {
+            isSelectorOpen = false;
+        }
+    }
+
+    private void ToggleSelector()
+    {
+        if (DateFilterMode == DateFilterMode.All || IsDateControlsDisabled)
+        {
+            isSelectorOpen = false;
+            return;
+        }
+
+        isSelectorOpen = !isSelectorOpen;
+    }
+
+    private async Task ChangeMode(DateFilterMode mode)
+    {
+        if (DateFilterMode == mode)
+        {
+            if (mode != DateFilterMode.All)
+            {
+                ToggleSelector();
+            }
+            else
+            {
+                isSelectorOpen = false;
+            }
+
+            return;
+        }
+
+        isSelectorOpen = mode != DateFilterMode.All && !IsDateControlsDisabled;
+        await OnDateFilterModeChanged.InvokeAsync(mode);
+    }
+
+    private string GetYearButtonClass(int year) =>
+        YearButtonClassSelector?.Invoke(year) ?? "btn btn-sm btn-outline-secondary";
+
+    private string GetMonthButtonClass(YearMonth option) =>
+        MonthButtonClassSelector?.Invoke(option) ?? "btn btn-sm btn-outline-secondary";
+
+    private string GetMonthLabel(YearMonth option) =>
+        MonthLabelSelector?.Invoke(option) ?? $"{option.Year}-{option.Month:D2}";
+}

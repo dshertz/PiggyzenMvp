@@ -264,84 +264,6 @@
     }
 }
 
-.chip-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.date-controls-block {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding-top: 0.75rem;
-}
-
-.mode-buttons {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.mode-btn {
-    border: none;
-    background: transparent;
-    color: #55516b;
-    padding: 0.35rem 0.75rem;
-    border-radius: 999px;
-    font-size: 0.9rem;
-    transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.mode-btn.active {
-    background: #120b24;
-    color: #fff;
-}
-
-.period-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.nav-btn,
-.current-period-btn {
-    border: 1px solid rgba(18, 11, 36, 0.15);
-    background: white;
-    border-radius: 12px;
-    height: 40px;
-    padding: 0 0.75rem;
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-}
-
-.current-period-btn {
-    min-width: 180px;
-    justify-content: center;
-}
-
-.pill-btn {
-    border-radius: 999px;
-    border: 1px solid rgba(18, 11, 36, 0.2);
-    background: white;
-    padding: 0.35rem 0.9rem;
-}
-
-.pill-btn.secondary {
-    border-style: dashed;
-}
-
-.period-selector {
-    padding: 0.5rem 0 0.75rem;
-}
-
-.period-selector .chip-row button {
-    border-radius: 999px;
-    min-width: 65px;
-}
-
 @media (max-width: 768px) {
     .transactions-filter-bar {
         top: -1px;
@@ -352,7 +274,4 @@
         align-items: stretch;
     }
 
-    .current-period-btn {
-        width: 100%;
-    }
 }
