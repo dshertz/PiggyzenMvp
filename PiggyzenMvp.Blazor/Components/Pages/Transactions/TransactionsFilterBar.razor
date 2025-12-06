@@ -6,6 +6,13 @@
 <section class="transactions-filter-bar">
     <div class="filter-bar-inner">
         <div class="topbar-row search-row">
+            <button type="button"
+                    class="tag-toggle-btn icon-only"
+                    title="@(filtersExpanded ? "Dölj filter" : "Visa filter")"
+                    aria-label="@(filtersExpanded ? "Dölj filter" : "Visa filter")"
+                    @onclick="ToggleFilterPanel">
+                <span class="bi bi-sliders"></span>
+            </button>
             <div class="search-input">
                 <input id="transaction-search"
                        class="form-control"
@@ -19,10 +26,6 @@
 
         <div class="filter-tag-panel">
             <div class="tag-row">
-                <button type="button" class="tag-toggle-btn" @onclick="ToggleFilterPanel">
-                    <span class="bi bi-sliders"></span>
-                    @(filtersExpanded ? "Dölj filter" : "Visa filter")
-                </button>
                 @if (HasActiveFilter)
                 {
                     <button type="button"

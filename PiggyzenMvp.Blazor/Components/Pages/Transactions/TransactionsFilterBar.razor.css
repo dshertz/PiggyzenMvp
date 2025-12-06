@@ -19,6 +19,7 @@
     align-items: center;
     width: 100%;
     min-height: 48px;
+    gap: 0.75rem;
 }
 
 .search-row {
@@ -37,6 +38,10 @@
     border: 1px solid rgba(18, 11, 36, 0.12);
     background: white;
     font-size: 1rem;
+}
+
+.topbar-row .search-input {
+    flex: 1 1 auto;
 }
 
 .search-icon {
@@ -73,6 +78,13 @@
     align-items: center;
     gap: 0.4rem;
     font-weight: 500;
+}
+
+.tag-toggle-btn.icon-only {
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    justify-content: center;
 }
 
 .tag-clear-btn {
