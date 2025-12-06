@@ -29,17 +29,24 @@
                     @onclick="() => OnStepPeriod.InvokeAsync(-1)">
                 <i class="bi bi-chevron-left"></i>
             </button>
-            <button type="button"
-                    class="current-period-btn"
-                    disabled="@IsDateControlsDisabled"
-                    @onclick="ToggleSelector">
-                <span class="current-period-label">@CurrentPeriodLabel</span>
-                @if (IsDateMultiSelect)
-                {
-                    <span class="current-period-meta">Multi</span>
-                }
-                <span class="bi @(showSelector ? "bi-chevron-up" : "bi-chevron-down")"></span>
-            </button>
+            <div class="current-period-control">
+                <button type="button"
+                        class="current-period-btn"
+                        disabled="@IsDateControlsDisabled"
+                        @onclick="JumpToCurrentPeriod">
+                    <span class="current-period-label">@CurrentPeriodLabel</span>
+                    @if (IsDateMultiSelect)
+                    {
+                        <span class="current-period-meta">Multi</span>
+                    }
+                </button>
+                <button type="button"
+                        class="selector-toggle-btn"
+                        disabled="@IsDateControlsDisabled"
+                        @onclick="ToggleSelector">
+                    <span class="bi @(showSelector ? "bi-chevron-up" : "bi-chevron-down")"></span>
+                </button>
+            </div>
             <button type="button"
                     class="nav-btn"
                     disabled="@IsPeriodNavigationDisabled"
@@ -117,6 +124,7 @@
     [Parameter] public EventCallback OnToggleDateMultiSelect { get; set; }
     [Parameter] public EventCallback OnClearDateFilters { get; set; }
     [Parameter] public EventCallback<int> OnStepPeriod { get; set; }
+    [Parameter] public EventCallback OnJumpToCurrentPeriod { get; set; }
     [Parameter] public IEnumerable<int> YearOptions { get; set; } = Enumerable.Empty<int>();
     [Parameter] public IEnumerable<YearMonth> MonthOptions { get; set; } = Enumerable.Empty<YearMonth>();
     [Parameter] public EventCallback<int> OnYearSelectionToggled { get; set; }
@@ -165,6 +173,18 @@
 
         isSelectorOpen = mode != DateFilterMode.All && !IsDateControlsDisabled;
         await OnDateFilterModeChanged.InvokeAsync(mode);
+    }
+
+    private Task JumpToCurrentPeriod()
+    {
+        if (IsDateControlsDisabled)
+        {
+            return Task.CompletedTask;
+        }
+
+        return OnJumpToCurrentPeriod.HasDelegate
+            ? OnJumpToCurrentPeriod.InvokeAsync()
+            : Task.CompletedTask;
     }
 
     private string GetYearButtonClass(int year) =>

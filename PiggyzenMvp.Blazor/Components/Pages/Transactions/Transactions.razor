@@ -19,6 +19,7 @@
                        IsDateControlsDisabled="@IsDateControlsDisabled"
                        IsPeriodNavigationDisabled="@IsPeriodNavigationDisabled"
                        CurrentPeriodLabel="@CurrentPeriodLabel"
+                       OnJumpToCurrentPeriod="JumpToCurrentPeriod"
                        OnDateFilterModeChanged="SetDateFilterMode"
                        OnToggleDateMultiSelect="ToggleDateMultiSelect"
                        OnClearDateFilters="ClearDateFilters"
@@ -614,6 +615,79 @@ else
         EnsurePeriodSelectionIsValid();
 
         _ = SaveFilterStateAsync();
+    }
+
+    private void JumpToCurrentPeriod()
+    {
+        if (IsDateControlsDisabled)
+            return;
+
+        if (dateFilterMode == DateFilterMode.Yearly)
+        {
+            var targetYear = ResolvePreferredYear();
+            if (!targetYear.HasValue)
+            {
+                return;
+            }
+
+            isDateMultiSelect = false;
+            selectedYears.Clear();
+            selectedYearMonths.Clear();
+            activeYear = targetYear.Value;
+            activeMonth = null;
+        }
+        else if (dateFilterMode == DateFilterMode.Monthly)
+        {
+            var targetMonth = ResolvePreferredMonth();
+            if (!targetMonth.HasValue)
+            {
+                return;
+            }
+
+            isDateMultiSelect = false;
+            selectedYears.Clear();
+            selectedYearMonths.Clear();
+            activeYear = targetMonth.Value.Year;
+            activeMonth = targetMonth.Value.Month;
+        }
+
+        EnsurePeriodSelectionIsValid();
+        _ = SaveFilterStateAsync();
+    }
+
+    private int? ResolvePreferredYear()
+    {
+        if (availableYears.Count == 0)
+        {
+            return null;
+        }
+
+        var currentYear = DateTime.Today.Year;
+        if (availableYears.Contains(currentYear))
+        {
+            return currentYear;
+        }
+
+        return availableYears.Max();
+    }
+
+    private YearMonth? ResolvePreferredMonth()
+    {
+        if (availableYearMonths.Count == 0)
+        {
+            return null;
+        }
+
+        var current = new YearMonth(DateTime.Today.Year, DateTime.Today.Month);
+        if (availableYearMonths.Contains(current))
+        {
+            return current;
+        }
+
+        return availableYearMonths
+            .OrderByDescending(p => p.Year)
+            .ThenByDescending(p => p.Month)
+            .First();
     }
 
     private string GetYearButtonClass(int year)

@@ -167,6 +167,7 @@
                                         IsDateControlsDisabled="@IsDateControlsDisabled"
                                         IsPeriodNavigationDisabled="@IsPeriodNavigationDisabled"
                                         CurrentPeriodLabel="@CurrentPeriodLabel"
+                                        OnJumpToCurrentPeriod="OnJumpToCurrentPeriod"
                                         OnDateFilterModeChanged="OnDateFilterModeChanged"
                                         OnToggleDateMultiSelect="OnToggleDateMultiSelect"
                                         OnClearDateFilters="OnClearDateFilters"
@@ -196,6 +197,7 @@
     [Parameter] public EventCallback OnToggleDateMultiSelect { get; set; }
     [Parameter] public EventCallback OnClearDateFilters { get; set; }
     [Parameter] public EventCallback<int> OnStepPeriod { get; set; }
+    [Parameter] public EventCallback OnJumpToCurrentPeriod { get; set; }
 
     [Parameter] public IEnumerable<int> YearOptions { get; set; } = Enumerable.Empty<int>();
     [Parameter] public IEnumerable<YearMonth> MonthOptions { get; set; } = Enumerable.Empty<YearMonth>();

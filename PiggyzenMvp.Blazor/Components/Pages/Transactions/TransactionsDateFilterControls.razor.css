@@ -46,8 +46,7 @@
     flex-wrap: wrap;
 }
 
-.nav-btn,
-.current-period-btn {
+.nav-btn {
     border: 1px solid rgba(18, 11, 36, 0.15);
     background: white;
     border-radius: 12px;
@@ -58,10 +57,47 @@
     gap: 0.35rem;
 }
 
+.current-period-control {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid rgba(18, 11, 36, 0.15);
+    border-radius: 12px;
+    overflow: hidden;
+    height: 40px;
+    background: white;
+}
+
 .current-period-btn {
+    border: none;
+    background: transparent;
     min-width: 180px;
+    padding: 0 0.75rem;
+    display: flex;
+    align-items: center;
     justify-content: center;
     gap: 0.35rem;
+    flex: 1 1 auto;
+}
+
+.current-period-btn:disabled {
+    opacity: 0.65;
+}
+
+.selector-toggle-btn {
+    border: none;
+    border-left: 1px solid rgba(18, 11, 36, 0.12);
+    background: transparent;
+    width: 42px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.selector-toggle-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
 }
 
 .pill-btn {
@@ -145,6 +181,7 @@
 }
 
 @media (max-width: 768px) {
+    .current-period-control,
     .current-period-btn {
         width: 100%;
     }
