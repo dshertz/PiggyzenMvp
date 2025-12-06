@@ -1,4 +1,5 @@
 @using System.Linq
+@using Microsoft.AspNetCore.Components.Web
 @using PiggyzenMvp.Blazor.Services
 @namespace PiggyzenMvp.Blazor.Components.Pages.Transactions
 
@@ -64,45 +65,99 @@
 
                 if (categorySections.Count > 0)
                 {
-                    <div class="tag-columns">
-                        @foreach (var section in categorySections)
-                        {
-                            if (section.Options.Count == 0)
-                            {
-                                continue;
-                            }
+                    <div class="category-header-row">
+                        <button type="button"
+                                class="group-chip @(categoriesCollapsed ? "active" : string.Empty)"
+                                @onclick="ToggleCategoriesCollapse">
+                            @(categoriesCollapsed ? "Visa kategorier" : "Dölj kategorier")
+                        </button>
+                        <button type="button"
+                                class="category-search-btn"
+                                title="Sök kategori"
+                                @onclick="ToggleCategorySearch">
+                            <span class="bi bi-search"></span>
+                        </button>
+                    </div>
 
-                            var groupChip = section.Options.First();
-                            var categoryChips = section.Options.Skip(1);
-
-                            <div class="tag-column">
-                                @if (!IsFilterActive(groupChip.Key))
+                    @if (showCategorySearch)
+                    {
+                        <div class="category-search-panel">
+                            <input class="category-search-input"
+                                   placeholder="Sök kategori…"
+                                   value="@categorySearchText"
+                                   @oninput="OnCategorySearchInput"
+                                   @onkeydown="OnCategorySearchKeyDown" />
+                            <div class="category-search-results">
+                                @if (!FilteredCategoryOptions.Any())
                                 {
-                                    <button type="button"
-                                            class="group-chip"
-                                            @onclick="() => ToggleFilter(groupChip.Key)">
-                                        @groupChip.Label
-                                    </button>
+                                    <div class="category-search-empty text-muted small px-2 py-1">
+                                        Inga kategorier matchar.
+                                    </div>
                                 }
-
-                                <div class="tag-column-categories">
-                                    @foreach (var chip in categoryChips)
+                                else
+                                {
+                                    @foreach (var option in FilteredCategoryOptions.Select((value, index) => new { value, index }))
                                     {
-                                        if (IsHiddenByParent(chip) || IsFilterActive(chip.Key))
-                                        {
-                                            continue;
-                                        }
-
+                                        var isSelected = option.index == highlightedCategoryIndex;
                                         <button type="button"
-                                                class="tag-option"
-                                                @onclick="() => ToggleFilter(chip.Key)">
-                                            @chip.Label
+                                                class="category-search-item @(option.value.IsGroup ? "group" : "category") @(isSelected ? "active" : string.Empty)"
+                                                @onclick="() => SelectCategoryFromSearch(option.value)">
+                                            @if (option.value.IsGroup)
+                                            {
+                                                <span class="category-search-label group">@option.value.Label</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="category-search-label category">@option.value.Label</span>
+                                            }
                                         </button>
                                     }
-                                </div>
+                                }
                             </div>
-                        }
-                    </div>
+                        </div>
+                    }
+
+                    if (!categoriesCollapsed)
+                    {
+                        <div class="tag-columns">
+                            @foreach (var section in categorySections)
+                            {
+                                if (section.Options.Count == 0)
+                                {
+                                    continue;
+                                }
+
+                                var groupChip = section.Options.First();
+                                var categoryChips = section.Options.Skip(1);
+
+                                <div class="tag-column">
+                                    <div class="group-chip-row">
+                                        <button type="button"
+                                                class="group-chip @(IsFilterActive(groupChip.Key) ? "active" : string.Empty)"
+                                                @onclick="() => ToggleFilter(groupChip.Key)">
+                                            @groupChip.Label
+                                        </button>
+                                    </div>
+
+                                    <div class="tag-column-categories">
+                                        @foreach (var chip in categoryChips)
+                                        {
+                                            if (IsHiddenByParent(chip) || IsFilterActive(chip.Key))
+                                            {
+                                                continue;
+                                            }
+
+                                            <button type="button"
+                                                    class="tag-option"
+                                                    @onclick="() => ToggleFilter(chip.Key)">
+                                                @chip.Label
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
                 }
             }
         </div>
@@ -231,6 +286,10 @@
     [Parameter] public IReadOnlyList<FilterChipSection> FilterSections { get; set; } = Array.Empty<FilterChipSection>();
 
     private bool filtersExpanded = true;
+    private bool categoriesCollapsed;
+    private bool showCategorySearch;
+    private string categorySearchText = string.Empty;
+    private int highlightedCategoryIndex;
     private bool isSelectorOpen;
     private HashSet<string> selectedFilterKeys = new(StringComparer.OrdinalIgnoreCase);
     private const string AllFilterKey = "all";
@@ -239,6 +298,13 @@
     private bool HasActiveFilter => selectedFilterKeys.Count > 0;
     private IEnumerable<FilterChipOption> ActiveFilters =>
         filterOrder.Where(o => selectedFilterKeys.Contains(o.Key));
+    private IEnumerable<FilterChipOption> FilteredCategoryOptions =>
+        filterOrder
+            .Where(o => o.IsGroup || o.ParentKey is not null)
+            .Where(o => string.IsNullOrWhiteSpace(categorySearchText) ||
+                        o.Label.Contains(categorySearchText, StringComparison.OrdinalIgnoreCase))
+            .Where(o => !IsFilterActive(o.Key) && !IsHiddenByParent(o))
+            .ToList();
 
     protected override void OnParametersSet()
     {
@@ -278,6 +344,60 @@
     private Task ClearFilters() => OnFilterCategoryChanged.InvokeAsync(AllFilterKey);
 
     private void ToggleFilterPanel() => filtersExpanded = !filtersExpanded;
+
+    private void ToggleCategoriesCollapse() => categoriesCollapsed = !categoriesCollapsed;
+
+    private void ToggleCategorySearch()
+    {
+        showCategorySearch = !showCategorySearch;
+        if (showCategorySearch)
+        {
+            highlightedCategoryIndex = 0;
+        }
+        else
+        {
+            categorySearchText = string.Empty;
+        }
+    }
+
+    private void OnCategorySearchInput(ChangeEventArgs e)
+    {
+        categorySearchText = e.Value?.ToString() ?? string.Empty;
+        highlightedCategoryIndex = 0;
+    }
+
+    private void OnCategorySearchKeyDown(KeyboardEventArgs e)
+    {
+        var options = FilteredCategoryOptions.ToList();
+        if (options.Count == 0)
+        {
+            return;
+        }
+
+        if (e.Key == "ArrowDown")
+        {
+            highlightedCategoryIndex = Math.Min(highlightedCategoryIndex + 1, options.Count - 1);
+        }
+        else if (e.Key == "ArrowUp")
+        {
+            highlightedCategoryIndex = Math.Max(highlightedCategoryIndex - 1, 0);
+        }
+        else if (e.Key == "Enter")
+        {
+            var option = options.ElementAtOrDefault(highlightedCategoryIndex);
+            if (option != null)
+            {
+                SelectCategoryFromSearch(option);
+            }
+        }
+    }
+
+    private async void SelectCategoryFromSearch(FilterChipOption option)
+    {
+        await ToggleFilter(option.Key);
+        categorySearchText = string.Empty;
+        highlightedCategoryIndex = 0;
+    }
 
     private string GetYearButtonClass(int year) =>
         YearButtonClassSelector?.Invoke(year) ?? "btn btn-sm btn-outline-secondary";
