@@ -9,145 +9,28 @@
 @inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedLocalStorage BrowserStorage
 @inject TransactionFilterState FilterState
 
-<h2>Transaktioner</h2>
-
-<div class="mb-4 d-flex flex-wrap align-items-end gap-3">
-    <div>
-        <label for="search" class="form-label mb-1">Sök</label>
-        <div class="input-group">
-            <InputText id="search"
-                       class="form-control"
-                       @bind-Value="searchText"
-                       oninput="this.dispatchEvent(new Event('change'))"
-                       @onchange="OnSearchChanged"
-                       placeholder="Sök beskrivning..." />
-            <span class="input-group-text bg-white">
-                <i class="bi bi-search"></i>
-            </span>
-        </div>
-    </div>
-    <div>
-        <label class="form-label mb-1">Filtrera</label>
-        <div class="btn-group" role="group" aria-label="Filter">
-            <button type="button"
-                    class="btn btn-outline-primary @(filterStateLoaded && filterCategory == "all" ? "active" : "")"
-                    @onclick='() => SetFilterCategory("all")'>
-                Alla
-            </button>
-            <button type="button"
-                    class="btn btn-outline-success @(filterStateLoaded && filterCategory == "categorized" ? "active" : "")"
-                    @onclick='() => SetFilterCategory("categorized")'>
-                Kategoriserade
-            </button>
-            <button type="button"
-                    class="btn btn-outline-warning @(filterStateLoaded && filterCategory == "uncategorized" ? "active" : "")"
-                    @onclick='() => SetFilterCategory("uncategorized")'>
-                Ej kategoriserade
-            </button>
-        </div>
-    </div>
-    <div class="ms-auto d-flex gap-2 align-items-center">
-        <span class="badge bg-success">Kategoriserade: @CategorizedCount</span>
-        <span class="badge bg-warning text-dark">Ej kategoriserade: @UncategorizedCount</span>
-        <span class="badge bg-info text-dark">Totalt: @(transactions?.Count ?? 0)</span>
-    </div>
-</div>
-
-<div class="card mb-4">
-    <div class="card-body">
-        <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
-            <div class="fw-semibold text-uppercase small text-muted">Datumfilter</div>
-            <div class="btn-group" role="group" aria-label="Datumläge">
-                <button type="button"
-                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.All ? "active" : "")"
-                        @onclick="() => SetDateFilterMode(DateFilterMode.All)">
-                    Alla
-                </button>
-                <button type="button"
-                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Yearly ? "active" : "")"
-                        @onclick="() => SetDateFilterMode(DateFilterMode.Yearly)">
-                    År
-                </button>
-                <button type="button"
-                        class="btn btn-outline-secondary @(dateFilterMode == DateFilterMode.Monthly ? "active" : "")"
-                        @onclick="() => SetDateFilterMode(DateFilterMode.Monthly)">
-                    Månad
-                </button>
-            </div>
-
-            <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
-                <div class="btn-group" role="group" aria-label="Periodnavigation">
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            disabled="@IsPeriodNavigationDisabled"
-                            @onclick="() => StepPeriod(-1)">
-                        <i class="bi bi-chevron-left"></i>
-                    </button>
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            disabled>
-                        @CurrentPeriodLabel
-                    </button>
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            disabled="@IsPeriodNavigationDisabled"
-                            @onclick="() => StepPeriod(1)">
-                        <i class="bi bi-chevron-right"></i>
-                    </button>
-                </div>
-                <button type="button"
-                        class="btn btn-outline-primary btn-sm"
-                        disabled="@IsDateControlsDisabled"
-                        @onclick="ToggleDateMultiSelect">
-                    @(isDateMultiSelect ? "Multi på" : "Multi av")
-                </button>
-                <button type="button"
-                        class="btn btn-link text-decoration-none"
-                        disabled="@IsDateControlsDisabled"
-                        @onclick="ClearDateFilters">
-                    Rensa filter
-                </button>
-            </div>
-        </div>
-
-        @if (dateFilterMode == DateFilterMode.All)
-        {
-            <div class="text-muted small">Alla datum visas.</div>
-        }
-        else if (dateFilterMode == DateFilterMode.Yearly)
-        {
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <span class="text-muted text-uppercase small fw-semibold">År</span>
-                <div class="d-flex flex-wrap gap-2">
-                    @foreach (var year in YearOptionsDisplay)
-                    {
-                        <button type="button"
-                                class="@GetYearButtonClass(year)"
-                                @onclick="() => ToggleYearSelection(year)">
-                            @year
-                        </button>
-                    }
-                </div>
-            </div>
-        }
-        else if (dateFilterMode == DateFilterMode.Monthly)
-        {
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <span class="text-muted text-uppercase small fw-semibold">Period</span>
-                <div class="d-flex flex-wrap gap-2">
-                    @foreach (var option in MonthOptionsDisplay)
-                    {
-                        <button type="button"
-                                class="@GetMonthButtonClass(option)"
-                                @onclick="() => ToggleMonthSelection(option)">
-                            @GetMonthLabel(option)
-                        </button>
-                    }
-                </div>
-            </div>
-        }
-    </div>
-</div>
+<TransactionsFilterBar SearchText="@searchText"
+                       FilterCategory="@CurrentFilterCategory"
+                       FilterSections="@filterSections"
+                       OnSearchTextChanged="UpdateSearchTextAsync"
+                       OnFilterCategoryChanged="SetFilterCategory"
+                       DateFilterMode="@dateFilterMode"
+                       IsDateMultiSelect="@isDateMultiSelect"
+                       IsDateControlsDisabled="@IsDateControlsDisabled"
+                       IsPeriodNavigationDisabled="@IsPeriodNavigationDisabled"
+                       CurrentPeriodLabel="@CurrentPeriodLabel"
+                       OnJumpToCurrentPeriod="JumpToCurrentPeriod"
+                       OnDateFilterModeChanged="SetDateFilterMode"
+                       OnToggleDateMultiSelect="ToggleDateMultiSelect"
+                       OnClearDateFilters="ClearDateFilters"
+                       OnStepPeriod="StepPeriod"
+                       YearOptions="YearOptionsDisplay"
+                       MonthOptions="MonthOptionsDisplay"
+                       OnYearSelectionToggled="ToggleYearSelection"
+                       OnMonthSelectionToggled="ToggleMonthSelection"
+                       YearButtonClassSelector="GetYearButtonClass"
+                       MonthButtonClassSelector="GetMonthButtonClass"
+                       MonthLabelSelector="GetMonthLabel" />
 
 @if (!string.IsNullOrWhiteSpace(errorMessage))
 {
@@ -161,29 +44,73 @@
 
 @if (selectedTransactionIds.Count > 0)
 {
-    <div class="alert alert-info d-flex flex-column flex-md-row align-items-md-end gap-3" role="alert">
-        <div>
-            <strong>@selectedTransactionIds.Count</strong> transaktion(er) markerade.
-        </div>
-        <div class="flex-grow-1">
-            <label class="form-label mb-1">Välj kategori</label>
-            <select class="form-select form-select-sm"
-                    value="@GetSelectedBulkCategoryValue()"
-                    @onchange="OnBulkCategoryChanged">
-                <option value="">— Välj kategori —</option>
-                @foreach (var category in categories)
+    <div class="alert alert-info bulk-categorization" role="alert">
+        <div class="bulk-categorization-header">
+            <div class="bulk-categorization-summary">
+                <div>
+                    <strong>@selectedTransactionIds.Count</strong> transaktion(er) markerade.
+                </div>
+                @if (GetSelectedBulkCategoryName() is { } selectedLabel)
                 {
-                    <option value="@category.Id">@GetCategoryDisplayName(category)</option>
+                    <div class="bulk-categorization-current">
+                        Vald kategori: <span>@selectedLabel</span>
+                    </div>
                 }
-            </select>
+            </div>
+            <div class="bulk-categorization-actions">
+                <button class="btn btn-primary"
+                        @onclick="CategorizeSelectedAsync"
+                        disabled="@IsBulkActionDisabled">
+                    @(isBulkCategorizing ? "Kategoriserar..." : $"Kategorisera {selectedTransactionIds.Count}")
+                </button>
+                <button class="btn btn-link text-decoration-none" type="button" @onclick="ClearSelection">
+                    Rensa markering
+                </button>
+            </div>
         </div>
-        <div class="d-flex flex-wrap gap-2">
-            <button class="btn btn-primary"
-                    @onclick="CategorizeSelectedAsync"
-                    disabled="@IsBulkActionDisabled">
-                @(isBulkCategorizing ? "Kategoriserar..." : $"Kategorisera {selectedTransactionIds.Count}")
-            </button>
-            <button class="btn btn-link text-decoration-none" type="button" @onclick="ClearSelection">Rensa markering</button>
+        <div class="bulk-categorization-menu-wrapper">
+                <div class="bulk-categorization-menu">
+                    <div class="bulk-category-search">
+                        <input class="bulk-category-search-input"
+                               placeholder="Sök kategori…"
+                               value="@bulkCategorySearchText"
+                               @oninput="OnBulkCategorySearchInput" />
+                        <button type="button"
+                                class="bulk-category-search-clear @(string.IsNullOrWhiteSpace(bulkCategorySearchText) ? "invisible" : string.Empty)"
+                                title="Rensa söktext"
+                                aria-label="Rensa söktext"
+                                @onclick="ClearBulkCategorySearch">
+                            <span class="bi bi-x-circle"></span>
+                        </button>
+                    </div>
+                @{
+                    var filteredGroups = GetFilteredBulkCategoryGroups().ToList();
+                }
+                <div class="bulk-category-list">
+                    @if (filteredGroups.Count == 0)
+                    {
+                        <div class="bulk-category-empty">Inga kategorier matchar din sökning.</div>
+                    }
+                    else
+                    {
+                        @foreach (var group in filteredGroups)
+                        {
+                            <section class="bulk-category-list-group">
+                                <header class="bulk-category-list-group-title">@group.DisplayName</header>
+                                @foreach (var category in group.Categories)
+                                {
+                                    var isActive = bulkCategoryId == category.Id;
+                                    <button type="button"
+                                            class="bulk-category-list-item @(isActive ? "active" : string.Empty)"
+                                            @onclick="() => SelectBulkCategory(category.Id)">
+                                        @category.EffectiveName
+                                    </button>
+                                }
+                            </section>
+                        }
+                    }
+                </div>
+            </div>
         </div>
     </div>
 }
@@ -198,21 +125,21 @@ else if (FilteredTransactions.Count == 0)
 }
 else
 {
-    <table class="table table-bordered table-striped">
+    <table class="table table-bordered table-striped transactions-table">
         <thead>
             <tr>
-                <th style="width: 48px;">
+                <th class="col-select text-center align-middle">
                     <input type="checkbox"
-                           class="form-check-input"
+                           class="form-check-input select-checkbox"
                            @onchange="ToggleSelectAllFiltered"
                            checked="@AreAllFilteredSelected" />
                 </th>
-                <th>Datum</th>
+                <th class="col-date">Datum</th>
                 <th>Beskrivning</th>
-                <th>Belopp</th>
-                <th>Saldo</th>
-                <th>Type</th>
-                <th>Category</th>
+                <th class="col-amount text-end">Belopp</th>
+                <th class="col-balance text-end">Saldo</th>
+                <th>Group</th>
+                <th class="col-category">Kategori</th>
             </tr>
         </thead>
         <tbody>
@@ -221,14 +148,14 @@ else
                 <tr @key="tx.Id">
                     <td class="text-center">
                         <input type="checkbox"
-                               class="form-check-input"
+                               class="form-check-input select-checkbox"
                                checked="@IsSelected(tx.Id)"
                                @onchange="e => ToggleSelection(tx.Id, e)" />
                     </td>
                     <td>@tx.TransactionDate.ToShortDateString()</td>
                     <td>@tx.Description</td>
-                    <td>@tx.Amount.ToString("F2")</td>
-                    <td>@(tx.Balance?.ToString("F2") ?? "-")</td>
+                    <td class="text-end">@tx.Amount.ToString("F2")</td>
+                    <td class="text-end">@(tx.Balance?.ToString("F2") ?? "-")</td>
                     <td>@(tx.TypeName ?? "—")</td>
                     <td>@(tx.CategoryName ?? "Ej vald")</td>
                 </tr>
@@ -237,9 +164,16 @@ else
     </table>
 }
 
+<div class="transactions-status-bar">
+    <span>Kategoriserade: <strong>@CategorizedCount</strong></span>
+    <span>Ej kategoriserade: <strong>@UncategorizedCount</strong></span>
+    <span>Totalt: <strong>@TotalTransactions</strong></span>
+</div>
+
 @code {
     private List<TransactionDto>? transactions;
     private List<CategoryDto> categories = new();
+    private List<CategoryGroupDto> categoryGroups = new();
     private HashSet<int> selectedTransactionIds = new();
     private int? bulkCategoryId;
     private bool isBulkCategorizing;
@@ -248,32 +182,52 @@ else
 
     // Filter state
     private string searchText = "";
-    private string? filterCategory = null;
+    private string filterCategory = "all";
     private const string FilterStateKey = "transactions_filter_state";
-    private bool filterStateLoaded;
     private DateFilterMode dateFilterMode = DateFilterMode.Monthly;
     private bool isDateMultiSelect;
     private HashSet<int> selectedYears = new();
     private HashSet<YearMonth> selectedYearMonths = new();
     private int? activeYear;
     private int? activeMonth;
+    private string bulkCategorySearchText = string.Empty;
     private List<int> availableYears = new();
     private List<YearMonth> availableYearMonths = new();
     private static readonly CultureInfo SwedishCulture = CultureInfo.GetCultureInfo("sv-SE");
+    private const string CategorizedFilterKey = "categorized";
+    private const string UncategorizedFilterKey = "uncategorized";
+    private const string PositiveAmountFilterKey = "amount:positive";
+    private const string NegativeAmountFilterKey = "amount:negative";
+    private const string CategoryFilterPrefix = "category:";
+    private const string GroupFilterPrefix = "group:";
+    private List<FilterChipSection> filterSections = new()
+    {
+        new FilterChipSection(null, CreateBaseFilterOptions())
+    };
+    private List<FilterChipOption> filterOptionOrder = CreateBaseFilterOptions();
+    private Dictionary<string, HashSet<int>> groupCategoryMap = new(StringComparer.OrdinalIgnoreCase);
+    private string CurrentFilterCategory => filterCategory;
+    private int TotalTransactions => transactions?.Count ?? 0;
 
     // Filtrerad lista
-    private List<TransactionDto> FilteredTransactions =>
-        transactions?
-            .Where(tx =>
-                (string.IsNullOrWhiteSpace(searchText) || tx.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
-                ((filterCategory ?? "all") == "all" ||
-                 ((filterCategory ?? "all") == "categorized" && tx.CategoryId != null) ||
-                 ((filterCategory ?? "all") == "uncategorized" && tx.CategoryId == null)) &&
-                MatchesDateFilter(tx)
-            )
-            .OrderByDescending(t => t.TransactionDate)
-            .ToList()
-        ?? new();
+    private List<TransactionDto> FilteredTransactions
+    {
+        get
+        {
+            var selectedFilters = ParseFilterSelection(filterCategory);
+            var filterCriteria = BuildFilterCriteria(selectedFilters);
+
+            return transactions?
+                .Where(tx =>
+                    (string.IsNullOrWhiteSpace(searchText) ||
+                     tx.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
+                    MatchesSelectionFilters(tx, filterCriteria) &&
+                    MatchesDateFilter(tx))
+                .OrderByDescending(t => t.TransactionDate)
+                .ToList()
+                ?? new();
+        }
+    }
 
     // Status info
     private int CategorizedCount => transactions?.Count(tx => tx.CategoryId != null) ?? 0;
@@ -292,6 +246,7 @@ else
                 LoadCategoriesAsync(client)
             );
 
+            BuildFilterSections();
             RefreshAvailablePeriods();
         }
         catch (Exception ex)
@@ -301,10 +256,6 @@ else
             categories = new();
             errorMessage = "Kunde inte läsa in data.";
         }
-        finally
-        {
-            filterStateLoaded = true;
-        }
     }
 
     private string GetCategoryDisplayName(CategoryDto category) =>
@@ -312,8 +263,16 @@ else
             ? category.EffectiveName
             : $"{category.GroupDisplayName} / {category.EffectiveName}";
 
-    private string GetSelectedBulkCategoryValue() =>
-        bulkCategoryId?.ToString() ?? string.Empty;
+    private string? GetSelectedBulkCategoryName()
+    {
+        if (bulkCategoryId is not int id)
+        {
+            return null;
+        }
+
+        var category = categories.FirstOrDefault(c => c.Id == id);
+        return category is null ? null : GetCategoryDisplayName(category);
+    }
 
     private bool AreAllFilteredSelected
     {
@@ -359,16 +318,49 @@ else
         }
     }
 
-    private void OnBulkCategoryChanged(ChangeEventArgs e)
+    private void OnBulkCategorySearchInput(ChangeEventArgs e)
     {
-        var rawValue = e.Value?.ToString();
-        if (string.IsNullOrWhiteSpace(rawValue))
+        bulkCategorySearchText = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private void SelectBulkCategory(int categoryId)
+    {
+        bulkCategoryId = bulkCategoryId == categoryId ? null : categoryId;
+    }
+
+    private void ClearBulkCategorySearch()
+    {
+        if (string.IsNullOrWhiteSpace(bulkCategorySearchText))
         {
-            bulkCategoryId = null;
             return;
         }
 
-        bulkCategoryId = int.TryParse(rawValue, out var value) ? value : null;
+        bulkCategorySearchText = string.Empty;
+    }
+
+    private IEnumerable<BulkCategoryGroupModel> GetFilteredBulkCategoryGroups()
+    {
+        var groups = categoryGroups
+            .Select(g => new BulkCategoryGroupModel(
+                string.IsNullOrWhiteSpace(g.DisplayName) ? "Övrigt" : g.DisplayName,
+                g.Categories))
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(bulkCategorySearchText))
+        {
+            return groups;
+        }
+
+        var query = bulkCategorySearchText.Trim();
+        return groups
+            .Select(g => new BulkCategoryGroupModel(
+                g.DisplayName,
+                g.Categories
+                    .Where(c =>
+                        c.EffectiveName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        (c.GroupDisplayName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                    .ToList()))
+            .Where(g => g.Categories.Count > 0);
     }
 
     private bool IsBulkActionDisabled =>
@@ -586,6 +578,7 @@ else
         }
 
         EnsurePeriodSelectionIsValid();
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -624,6 +617,7 @@ else
             }
         }
 
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -642,6 +636,7 @@ else
             activeYear = year;
         }
 
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -661,6 +656,7 @@ else
             activeMonth = option.Month;
         }
 
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -691,6 +687,7 @@ else
             }
         }
 
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
@@ -708,7 +705,82 @@ else
         selectedYearMonths.Clear();
         EnsurePeriodSelectionIsValid();
 
+        PruneSelection();
         _ = SaveFilterStateAsync();
+    }
+
+    private void JumpToCurrentPeriod()
+    {
+        if (IsDateControlsDisabled)
+            return;
+
+        if (dateFilterMode == DateFilterMode.Yearly)
+        {
+            var targetYear = ResolvePreferredYear();
+            if (!targetYear.HasValue)
+            {
+                return;
+            }
+
+            isDateMultiSelect = false;
+            selectedYears.Clear();
+            selectedYearMonths.Clear();
+            activeYear = targetYear.Value;
+            activeMonth = null;
+        }
+        else if (dateFilterMode == DateFilterMode.Monthly)
+        {
+            var targetMonth = ResolvePreferredMonth();
+            if (!targetMonth.HasValue)
+            {
+                return;
+            }
+
+            isDateMultiSelect = false;
+            selectedYears.Clear();
+            selectedYearMonths.Clear();
+            activeYear = targetMonth.Value.Year;
+            activeMonth = targetMonth.Value.Month;
+        }
+
+        EnsurePeriodSelectionIsValid();
+        PruneSelection();
+        _ = SaveFilterStateAsync();
+    }
+
+    private int? ResolvePreferredYear()
+    {
+        if (availableYears.Count == 0)
+        {
+            return null;
+        }
+
+        var currentYear = DateTime.Today.Year;
+        if (availableYears.Contains(currentYear))
+        {
+            return currentYear;
+        }
+
+        return availableYears.Max();
+    }
+
+    private YearMonth? ResolvePreferredMonth()
+    {
+        if (availableYearMonths.Count == 0)
+        {
+            return null;
+        }
+
+        var current = new YearMonth(DateTime.Today.Year, DateTime.Today.Month);
+        if (availableYearMonths.Contains(current))
+        {
+            return current;
+        }
+
+        return availableYearMonths
+            .OrderByDescending(p => p.Year)
+            .ThenByDescending(p => p.Month)
+            .First();
     }
 
     private string GetYearButtonClass(int year)
@@ -732,7 +804,7 @@ else
     {
         var date = new DateTime(option.Year, option.Month, 1);
         var monthAbbreviation = date.ToString("MMM", SwedishCulture).TrimEnd('.');
-        return $"{date:yyyy} {monthAbbreviation.ToLower(SwedishCulture)}.";
+        return monthAbbreviation.ToLower(SwedishCulture);
     }
 
     private void RefreshAvailablePeriods()
@@ -836,6 +908,42 @@ else
         }
     }
 
+    private static HashSet<string> ParseFilterSelection(string? value)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(value) || value.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            return set;
+        }
+
+        var parts = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var part in parts)
+        {
+            set.Add(part);
+        }
+
+        return set;
+    }
+
+    private string NormalizeFilterCategory(string? value, bool dropUnknown = false)
+    {
+        var parsed = ParseFilterSelection(value);
+        if (parsed.Count == 0)
+        {
+            return "all";
+        }
+
+        var orderedKeys = filterOptionOrder.Select(o => o.Key).Where(parsed.Contains).ToList();
+        var seen = new HashSet<string>(orderedKeys, StringComparer.OrdinalIgnoreCase);
+        var extras = parsed
+            .Where(k => !seen.Contains(k))
+            .OrderBy(k => k, StringComparer.OrdinalIgnoreCase);
+
+        return dropUnknown
+            ? string.Join(',', orderedKeys)
+            : string.Join(',', orderedKeys.Concat(extras));
+    }
+
     private bool MatchesDateFilter(TransactionDto tx)
     {
         if (dateFilterMode == DateFilterMode.All)
@@ -864,46 +972,70 @@ else
         return year == activeYear.Value && month == activeMonth.Value;
     }
 
+    private static bool MatchesSelectionFilters(TransactionDto tx, FilterCriteria criteria)
+    {
+        var statusMatch = !criteria.HasStatusFilters ||
+            ((criteria.IncludeCategorized && tx.CategoryId != null) ||
+             (criteria.IncludeUncategorized && tx.CategoryId == null));
+        var amountMatch = !criteria.HasAmountFilters ||
+            ((criteria.IncludePositive && tx.Amount >= 0) ||
+             (criteria.IncludeNegative && tx.Amount < 0));
+        var categoryMatch = criteria.CategoryIds.Count == 0 ||
+            (tx.CategoryId is int id && criteria.CategoryIds.Contains(id));
+
+        return statusMatch && amountMatch && categoryMatch;
+    }
+
+    private FilterCriteria BuildFilterCriteria(HashSet<string> filters)
+    {
+        var includeCategorized = filters.Contains(CategorizedFilterKey);
+        var includeUncategorized = filters.Contains(UncategorizedFilterKey);
+        var includePositive = filters.Contains(PositiveAmountFilterKey);
+        var includeNegative = filters.Contains(NegativeAmountFilterKey);
+
+        var categoryIds = new HashSet<int>();
+        foreach (var key in filters)
+        {
+            if (key.StartsWith(CategoryFilterPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var raw = key.Substring(CategoryFilterPrefix.Length);
+                if (int.TryParse(raw, out var parsed))
+                {
+                    categoryIds.Add(parsed);
+                }
+            }
+            else if (key.StartsWith(GroupFilterPrefix, StringComparison.OrdinalIgnoreCase) &&
+                     groupCategoryMap.TryGetValue(key, out var ids))
+            {
+                foreach (var id in ids)
+                {
+                    categoryIds.Add(id);
+                }
+            }
+        }
+
+        return new FilterCriteria(includeCategorized, includeUncategorized, includePositive, includeNegative, categoryIds);
+    }
+
     private void SetFilterCategory(string category)
     {
-        filterCategory = category;
+        filterCategory = NormalizeFilterCategory(category);
+        PruneSelection();
         _ = SaveFilterStateAsync();
     }
 
-    private async Task OnSearchChanged(ChangeEventArgs e)
+    private async Task UpdateSearchTextAsync(string? value)
     {
-        searchText = e.Value?.ToString() ?? "";
+        searchText = value ?? string.Empty;
+        PruneSelection();
         await SaveFilterStateAsync();
-    }
-
-    private readonly record struct YearMonth(int Year, int Month)
-    {
-        public string ToStorageKey() => $"{Year:D4}-{Month:D2}";
-
-        public static bool TryParse(string? input, out YearMonth period)
-        {
-            period = default;
-            if (string.IsNullOrWhiteSpace(input))
-                return false;
-
-            var parts = input.Split('-', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 2)
-                return false;
-
-            if (int.TryParse(parts[0], out var year) && int.TryParse(parts[1], out var month) && month is >= 1 and <= 12)
-            {
-                period = new YearMonth(year, month);
-                return true;
-            }
-
-            return false;
-        }
     }
 
     private async Task LoadFilterStateAsync()
     {
         // 1) Läs från in-memory state (Blazor circuit). Ingen async/lagg.
-        filterCategory = FilterState.FilterCategory;
+        filterCategory = NormalizeFilterCategory(FilterState.FilterCategory);
+        FilterState.FilterCategory = filterCategory;
         searchText = FilterState.SearchText;
         dateFilterMode = FilterState.DateMode;
         isDateMultiSelect = FilterState.IsDateMultiSelect;
@@ -922,7 +1054,7 @@ else
             var result = await BrowserStorage.GetAsync<FilterStatePayload>(FilterStateKey);
             if (result.Success && result.Value is FilterStatePayload state)
             {
-                filterCategory = state.FilterCategory ?? filterCategory ?? "all";
+                filterCategory = NormalizeFilterCategory(state.FilterCategory ?? filterCategory ?? "all");
                 searchText = state.SearchText ?? searchText ?? string.Empty;
                 dateFilterMode = state.DateMode;
                 isDateMultiSelect = state.IsDateMultiSelect;
@@ -934,7 +1066,7 @@ else
                     .Where(p => p.HasValue)
                     .Select(p => p.Value)
                     .ToHashSet() ?? selectedYearMonths;
-                FilterState.FilterCategory = filterCategory ?? "all";
+                FilterState.FilterCategory = filterCategory;
                 FilterState.SearchText = searchText ?? string.Empty;
                 FilterState.DateMode = dateFilterMode;
                 FilterState.IsDateMultiSelect = isDateMultiSelect;
@@ -953,7 +1085,7 @@ else
 
     private async Task SaveFilterStateAsync()
     {
-        FilterState.FilterCategory = filterCategory ?? "all";
+        FilterState.FilterCategory = filterCategory;
         FilterState.SearchText = searchText ?? string.Empty;
         FilterState.DateMode = dateFilterMode;
         FilterState.IsDateMultiSelect = isDateMultiSelect;
@@ -991,13 +1123,30 @@ else
 
     private async Task LoadCategoriesAsync(HttpClient client)
     {
-        var data = await client.GetFromJsonAsync<List<CategoryGroupDto>>("api/categories");
-        categories = data?
+        var data = await client.GetFromJsonAsync<List<CategoryGroupDto>>("api/categories") ?? new();
+
+        categoryGroups = data
+            .Select(g => new CategoryGroupDto
+            {
+                Id = g.Id,
+                Key = g.Key,
+                DisplayName = g.DisplayName,
+                SortOrder = g.SortOrder,
+                Categories = g.Categories
+                    .Where(c => c.IsActive && !c.IsHidden)
+                    .OrderBy(c => c.SortOrder)
+                    .ToList()
+            })
+            .Where(g => g.Categories.Count > 0)
+            .OrderBy(g => g.SortOrder)
+            .ThenBy(g => g.DisplayName)
+            .ToList();
+
+        categories = categoryGroups
             .SelectMany(g => g.Categories)
-            .Where(c => c.IsActive && !c.IsHidden)
             .OrderBy(c => c.GroupId)
             .ThenBy(c => c.SortOrder)
-            .ToList() ?? new();
+            .ToList();
     }
 
     private async Task RefreshTransactionsAsync()
@@ -1013,6 +1162,72 @@ else
             Console.Error.WriteLine($"Fel vid uppdatering: {ex.Message}");
             errorMessage = "Kunde inte uppdatera transaktionerna efter kategorisering.";
         }
+    }
+    
+    private static List<FilterChipOption> CreateBaseFilterOptions() => new()
+    {
+        new FilterChipOption(CategorizedFilterKey, "Kategoriserade"),
+        new FilterChipOption(UncategorizedFilterKey, "Ej kategoriserade"),
+        new FilterChipOption(PositiveAmountFilterKey, "Positiva belopp"),
+        new FilterChipOption(NegativeAmountFilterKey, "Negativa belopp")
+    };
+
+    private void BuildFilterSections()
+    {
+        groupCategoryMap = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
+
+        var sections = new List<FilterChipSection>();
+        var baseSectionOptions = CreateBaseFilterOptions();
+        sections.Add(new FilterChipSection(null, baseSectionOptions));
+
+        foreach (var group in categoryGroups)
+        {
+            var groupLabel = string.IsNullOrWhiteSpace(group.DisplayName) ? "Övrigt" : group.DisplayName;
+            var groupKey = $"{GroupFilterPrefix}{group.Id}";
+
+            var sectionOptions = new List<FilterChipOption>
+            {
+                new FilterChipOption(groupKey, groupLabel, null, true)
+            };
+
+            foreach (var category in group.Categories)
+            {
+                sectionOptions.Add(new FilterChipOption($"{CategoryFilterPrefix}{category.Id}", category.EffectiveName, groupKey));
+            }
+
+            groupCategoryMap[groupKey] = group.Categories.Select(c => c.Id).ToHashSet();
+            sections.Add(new FilterChipSection(null, sectionOptions));
+        }
+
+        filterSections = sections;
+        filterOptionOrder = sections.SelectMany(s => s.Options).ToList();
+        filterCategory = NormalizeFilterCategory(filterCategory, dropUnknown: true);
+        FilterState.FilterCategory = filterCategory;
+    }
+
+    private void PruneSelection()
+    {
+        if (transactions is null || selectedTransactionIds.Count == 0)
+        {
+            return;
+        }
+
+        var filteredIds = FilteredTransactions.Select(t => t.Id).ToHashSet();
+        selectedTransactionIds.RemoveWhere(id => !filteredIds.Contains(id));
+    }
+
+    private sealed record BulkCategoryGroupModel(string DisplayName, List<CategoryDto> Categories);
+
+    private sealed record FilterCriteria(
+        bool IncludeCategorized,
+        bool IncludeUncategorized,
+        bool IncludePositive,
+        bool IncludeNegative,
+        HashSet<int> CategoryIds)
+    {
+        public bool HasStatusFilters => IncludeCategorized || IncludeUncategorized;
+        public bool HasAmountFilters => IncludePositive || IncludeNegative;
+        public bool HasCategoryFilters => CategoryIds.Count > 0;
     }
 
     private class FilterStatePayload

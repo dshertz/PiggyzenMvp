@@ -1,0 +1,196 @@
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.date-controls-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+}
+
+.date-controls-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.mode-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.mode-btn {
+    border: none;
+    background: transparent;
+    color: #55516b;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mode-btn.active {
+    background: #120b24;
+    color: #fff;
+}
+
+.period-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.nav-btn {
+    border: 1px solid rgba(18, 11, 36, 0.15);
+    background: white;
+    border-radius: 12px;
+    height: 40px;
+    padding: 0 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.current-period-control {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid rgba(18, 11, 36, 0.15);
+    border-radius: 12px;
+    overflow: hidden;
+    height: 40px;
+    background: white;
+}
+
+.current-period-btn {
+    border: none;
+    background: transparent;
+    min-width: 180px;
+    padding: 0 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    flex: 1 1 auto;
+}
+
+.current-period-btn:disabled {
+    opacity: 0.65;
+}
+
+.selector-toggle-btn {
+    border: none;
+    border-left: 1px solid rgba(18, 11, 36, 0.12);
+    background: transparent;
+    width: 42px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.selector-toggle-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.pill-btn {
+    border-radius: 999px;
+    border: 1px solid rgba(18, 11, 36, 0.2);
+    background: white;
+    padding: 0.35rem 0.9rem;
+}
+
+.pill-btn.secondary {
+    border-style: dashed;
+}
+
+.date-utility-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.period-selector {
+    padding: 0.5rem 0 0.75rem;
+}
+
+.period-selector .chip-row button {
+    border-radius: 999px;
+    min-width: 65px;
+}
+
+.month-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.month-group {
+    border: 1px solid rgba(18, 11, 36, 0.15);
+    border-radius: 10px;
+    padding: 0.5rem 0.75rem 0.75rem;
+    background: #fff;
+}
+
+.month-group-header {
+    font-weight: 600;
+    font-size: 1rem;
+    text-align: center;
+    margin-bottom: 0.3rem;
+}
+
+.month-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.35rem;
+}
+
+.month-grid button {
+    width: 100%;
+    border-radius: 4px;
+    border: 1px solid rgba(18, 11, 36, 0.2);
+    padding: 0.4rem 0.2rem;
+    background: #fafafa;
+    font-size: 0.85rem;
+    text-transform: lowercase;
+}
+
+.month-grid button.active {
+    background: #120b24;
+    color: #fff;
+    border-color: #120b24;
+}
+
+.current-period-label {
+    font-weight: 500;
+}
+
+.current-period-meta {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #7c7c95;
+}
+
+@media (max-width: 768px) {
+    .current-period-control,
+    .current-period-btn {
+        width: 100%;
+    }
+
+    .month-groups {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .month-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

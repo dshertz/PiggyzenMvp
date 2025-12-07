@@ -1,0 +1,328 @@
+.transactions-filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #f7f7fb;
+    border-bottom: 1px solid rgba(18, 11, 36, 0.08);
+    margin-bottom: 1.5rem;
+}
+
+.filter-bar-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1rem 1rem 0.35rem;
+}
+
+.topbar-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 42px;
+    gap: 0.5rem;
+}
+
+.search-row {
+    padding-bottom: 0.15rem;
+}
+
+.search-input {
+    position: relative;
+    width: 100%;
+}
+
+.search-input .form-control {
+    padding-left: 2.15rem;
+    padding-right: 2.25rem;
+    height: 42px;
+    border-radius: 10px;
+    border: 1px solid rgba(18, 11, 36, 0.12);
+    background: white;
+    font-size: 1rem;
+}
+
+.topbar-row .search-input {
+    flex: 1 1 auto;
+}
+
+.search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #7c7c95;
+    font-size: 1rem;
+}
+
+.search-clear-btn {
+    position: absolute;
+    right: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: #7c7c95;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.search-clear-btn.invisible {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.filter-tag-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(18, 11, 36, 0.08);
+}
+
+.tag-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.tag-toggle-btn {
+    border: none;
+    background: #12b0e8;
+    color: white;
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 500;
+}
+
+.tag-toggle-btn.icon-only {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    justify-content: center;
+}
+
+.tag-clear-btn {
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(18, 11, 36, 0.25);
+    background: white;
+    color: #120b24;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0.25rem;
+}
+
+.tag-palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tag-active-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    flex: 1 1 auto;
+}
+
+.tag-option {
+    border-radius: 999px;
+    border: 1px solid rgba(18, 11, 36, 0.15);
+    padding: 0.35rem 0.85rem;
+    background: white;
+    color: #120b24;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+.tag-option.active {
+    background: #dfeaff;
+    border-color: #7fa0ff;
+}
+
+.active-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.active-tag {
+    border-radius: 999px;
+    border: 1px solid #7fa0ff;
+    background: #eaf1ff;
+    color: #0f1c3d;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.7rem;
+    cursor: pointer;
+}
+
+.tag-general-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.category-header-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.category-search-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid rgba(18, 11, 36, 0.2);
+    background: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.category-search-panel {
+    position: relative;
+    margin-top: 0.75rem;
+    border: 1px solid rgba(18, 11, 36, 0.15);
+    border-radius: 12px;
+    background: white;
+    box-shadow: 0 8px 20px rgba(18, 11, 36, 0.1);
+}
+
+.category-search-input {
+    width: 100%;
+    padding: 0.5rem 2.25rem 0.5rem 0.75rem;
+    border: none;
+    border-bottom: 1px solid rgba(18, 11, 36, 0.1);
+}
+
+.category-search-input:focus {
+    outline: none;
+    border-bottom-color: #1c1640;
+}
+
+.category-search-clear {
+    position: absolute;
+    right: 0.6rem;
+    top: 0.55rem;
+    border: none;
+    background: transparent;
+    color: #7c7c95;
+    font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.category-search-clear.invisible {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.category-search-results {
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.category-search-item {
+    width: 100%;
+    text-align: left;
+    padding: 0.4rem 0.75rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+}
+
+.category-search-item.active,
+.category-search-item:hover {
+    background: #f1f3ff;
+}
+
+.category-search-item.group .category-search-label {
+    font-weight: 600;
+    color: #1c1640;
+}
+
+.category-search-item.category .category-search-label {
+    padding-left: 1rem;
+}
+
+.category-search-empty {
+    padding: 0.5rem 0.75rem;
+}
+
+.tag-columns {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(140px, 1fr));
+    gap: 1rem;
+    margin-top: 0.75rem;
+}
+
+.tag-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.group-chip {
+    border-radius: 999px;
+    border: 1px solid rgba(18, 11, 36, 0.35);
+    background: #f1f3ff;
+    color: #1c1640;
+    padding: 0.3rem 0.9rem;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+}
+
+.tag-column-categories {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+@media (min-width: 768px) {
+    .tag-columns {
+        grid-template-columns: repeat(3, minmax(140px, 1fr));
+    }
+}
+
+@media (min-width: 992px) {
+    .tag-columns {
+        grid-template-columns: repeat(4, minmax(140px, 1fr));
+    }
+}
+
+@media (min-width: 1200px) {
+    .tag-columns {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .transactions-filter-bar {
+        top: -1px;
+    }
+
+    .topbar-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+}
