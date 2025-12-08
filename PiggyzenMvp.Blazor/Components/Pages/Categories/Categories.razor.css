@@ -27,6 +27,15 @@
     width: 20%;
 }
 
+.categories-table .col-system-display,
+.categories-table .col-custom-display {
+    width: 22%;
+}
+
+.categories-table .col-sort-order {
+    width: 10%;
+}
+
 .categories-table .col-status {
     width: 15%;
 }
@@ -38,6 +47,34 @@
     color: #6c6f85;
     font-size: 1rem;
     min-height: 24px;
+}
+
+.column-toggle-container {
+    position: relative;
+    display: inline-block;
+}
+
+.column-toggle-menu {
+    position: absolute;
+    top: 110%;
+    left: 0;
+    background-color: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    min-width: 220px;
+    display: none;
+    z-index: 5;
+}
+
+.column-toggle-menu.open {
+    display: block;
+}
+
+.column-toggle-menu .form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
 }
 
 .categories-table .btn-group-sm .toggle-visibility.is-visible i {

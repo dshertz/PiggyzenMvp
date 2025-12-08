@@ -4,15 +4,39 @@
 @using System.Net.Http.Json
 @using PiggyzenMvp.Blazor.DTOs
 @inject IHttpClientFactory HttpClientFactory
+@inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedLocalStorage BrowserStorage
 
 <h2 class="mb-3">Kategorier</h2>
 
 <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
     <label class="form-check form-switch d-flex align-items-center mb-0">
-        <input class="form-check-input" type="checkbox" role="switch" @bind="showHiddenCategories" />
+        <input class="form-check-input" type="checkbox" role="switch" @bind="showHiddenCategories" @bind:after="OnPreferencesChanged" />
         <span class="ms-2">Visa dolda kategorier</span>
     </label>
     <small class="text-muted">Använd filtret för att visa kategorier som stängts av.</small>
+</div>
+
+<div class="mb-3 column-toggle-container">
+    <button class="btn btn-sm btn-outline-secondary"
+            type="button"
+            @onclick="ToggleColumnMenu">
+        Kolumner
+        <span class="ms-1 bi @(isColumnMenuOpen ? "bi-chevron-up" : "bi-chevron-down")"></span>
+    </button>
+    <div class="column-toggle-menu @(isColumnMenuOpen ? "open" : string.Empty)">
+        <label class="form-check form-switch d-flex align-items-center mb-2">
+            <input class="form-check-input" type="checkbox" role="switch" @bind="showSystemDisplayColumn" @bind:after="OnPreferencesChanged" />
+            <span class="ms-2">SystemDisplayName</span>
+        </label>
+        <label class="form-check form-switch d-flex align-items-center mb-2">
+            <input class="form-check-input" type="checkbox" role="switch" @bind="showCustomDisplayColumn" @bind:after="OnPreferencesChanged" />
+            <span class="ms-2">CustomDisplayName</span>
+        </label>
+        <label class="form-check form-switch d-flex align-items-center mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" @bind="showSortOrderColumn" @bind:after="OnPreferencesChanged" />
+            <span class="ms-2">SortOrder</span>
+        </label>
+    </div>
 </div>
 
 @if (!string.IsNullOrWhiteSpace(errorMessage))
@@ -42,7 +66,18 @@ else
                     <thead class="table-light text-uppercase small">
                         <tr>
                             <th class="col-display">DisplayName</th>
-                            <th class="col-user-display">CustomDisplayName</th>
+                            @if (showSystemDisplayColumn)
+                            {
+                                <th class="col-system-display">SystemDisplayName</th>
+                            }
+                            @if (showCustomDisplayColumn)
+                            {
+                                <th class="col-custom-display">CustomDisplayName</th>
+                            }
+                            @if (showSortOrderColumn)
+                            {
+                                <th class="col-sort-order">SortOrder</th>
+                            }
                             <th class="col-status">Status</th>
                             <th class="col-actions text-end">Åtgärder</th>
                         </tr>
@@ -51,7 +86,7 @@ else
                         @if (visibleCategories.Count == 0)
                         {
                             <tr>
-                                <td colspan="4" class="text-muted py-4 text-center">
+                                <td colspan="@GetTableColumnSpan()" class="text-muted py-4 text-center">
                                     Inga kategorier visas med valt filter.
                                 </td>
                             </tr>
@@ -74,30 +109,44 @@ else
                                             <span class="category-name">@category.DisplayName</span>
                                         }
                                     </td>
-                                    <td class="col-user-display">
-                                        @if (category.IsSystemCategory)
-                                        {
-                                            if (isEditing)
+                                    @if (showSystemDisplayColumn)
+                                    {
+                                        <td class="col-system-display">
+                                            @category.SystemDisplayName
+                                        </td>
+                                    }
+                                    @if (showCustomDisplayColumn)
+                                    {
+                                        <td class="col-custom-display">
+                                            @if (category.IsSystemCategory)
                                             {
-                                                <input class="form-control form-control-sm"
-                                                       @bind="editModel.DisplayName"
-                                                       title="Systemnamn: @category.DisplayName"
-                                                       placeholder="Visningsnamn" />
-                                            }
-                                            else if (!string.IsNullOrWhiteSpace(category.CustomDisplayName))
-                                            {
-                                                <span class="category-name">@category.CustomDisplayName</span>
+                                                if (isEditing)
+                                                {
+                                                    <input class="form-control form-control-sm"
+                                                           @bind="editModel.DisplayName"
+                                                           placeholder="Anpassat namn" />
+                                                }
+                                                else if (!string.IsNullOrWhiteSpace(category.CustomDisplayName))
+                                                {
+                                                    <span class="category-name">@category.CustomDisplayName</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted fst-italic">Använder systemnamn</span>
+                                                }
                                             }
                                             else
                                             {
-                                                <span class="text-muted fst-italic">Använder DisplayName</span>
+                                                <span class="text-muted">—</span>
                                             }
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">—</span>
-                                        }
-                                    </td>
+                                        </td>
+                                    }
+                                    @if (showSortOrderColumn)
+                                    {
+                                        <td class="col-sort-order">
+                                            @category.SortOrder
+                                        </td>
+                                    }
                                     <td class="col-status">
                                         <div class="status-icons">
                                             @if (category.IsSystemCategory)
@@ -152,13 +201,13 @@ else
                         }
 
                         <tr>
-                            <td colspan="4">
+                            <td colspan="@GetTableColumnSpan()">
                                 @if (creatingGroupId == group.Id)
                                 {
                                     <div class="d-flex gap-3 align-items-center">
                                         <input class="form-control form-control-sm"
-                                               placeholder="DisplayName"
-                                               @bind="createModel.DisplayName" />
+                                               placeholder="SystemDisplayName"
+                                               @bind="createModel.SystemDisplayName" />
                                         <div class="ms-auto d-flex gap-2">
                                             <button class="btn btn-sm btn-primary" disabled="@isBusy"
                                                     @onclick="() => CreateCategoryAsync(group.Id)">
@@ -187,10 +236,15 @@ else
 }
 
 @code {
+    private const string PreferenceStorageKey = "categories_table_preferences";
     private List<CategoryGroupDto> groups = new();
     private bool isBusy;
     private string? errorMessage;
     private bool showHiddenCategories;
+    private bool isColumnMenuOpen;
+    private bool showSystemDisplayColumn = true;
+    private bool showCustomDisplayColumn = true;
+    private bool showSortOrderColumn = true;
 
     private int? editingCategoryId;
     private int? creatingGroupId;
@@ -198,7 +252,11 @@ else
     private readonly CreateCategoryModel createModel = new();
     private readonly EditCategoryModel editModel = new();
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreferencesAsync();
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -235,18 +293,18 @@ else
     private void StartCreate(int groupId)
     {
         creatingGroupId = groupId;
-        createModel.DisplayName = "";
+        createModel.SystemDisplayName = "";
     }
 
     private void CancelCreate()
     {
         creatingGroupId = null;
-        createModel.DisplayName = "";
+        createModel.SystemDisplayName = "";
     }
 
     private async Task CreateCategoryAsync(int groupId)
     {
-        if (string.IsNullOrWhiteSpace(createModel.DisplayName))
+        if (string.IsNullOrWhiteSpace(createModel.SystemDisplayName))
         {
             errorMessage = "Ange ett namn.";
             return;
@@ -258,7 +316,7 @@ else
             var client = HttpClientFactory.CreateClient("ApiClient");
             var req = new CreateCategoryRequest
             {
-                SystemDisplayName = createModel.DisplayName.Trim(),
+                SystemDisplayName = createModel.SystemDisplayName.Trim(),
                 GroupId = groupId,
             };
 
@@ -359,7 +417,7 @@ else
 
     private class CreateCategoryModel
     {
-        public string DisplayName { get; set; } = "";
+        public string SystemDisplayName { get; set; } = "";
     }
 
     private class EditCategoryModel
@@ -382,7 +440,58 @@ else
 
     private IEnumerable<CategoryDto> GetVisibleCategories(CategoryGroupDto group) =>
         group.Categories
-            .Where(c => showHiddenCategories || c.IsEnabled);
+            .Where(c => showHiddenCategories || c.IsEnabled)
+            .OrderBy(c => c.IsEnabled ? 0 : 1)
+            .ThenBy(c => c.SortOrder)
+            .ThenBy(c => c.DisplayName);
+
+    private void ToggleColumnMenu() => isColumnMenuOpen = !isColumnMenuOpen;
+
+    private int GetTableColumnSpan() =>
+        3
+        + (showSystemDisplayColumn ? 1 : 0)
+        + (showCustomDisplayColumn ? 1 : 0)
+        + (showSortOrderColumn ? 1 : 0);
+
+    private async Task LoadPreferencesAsync()
+    {
+        try
+        {
+            var result = await BrowserStorage.GetAsync<ColumnPreferenceState>(PreferenceStorageKey);
+            if (result.Success && result.Value is ColumnPreferenceState prefs)
+            {
+                showHiddenCategories = prefs.ShowHiddenCategories;
+                showSystemDisplayColumn = prefs.ShowSystemDisplayName;
+                showCustomDisplayColumn = prefs.ShowCustomDisplayName;
+                showSortOrderColumn = prefs.ShowSortOrder;
+            }
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
+
+    private Task OnPreferencesChanged() => PersistPreferencesAsync();
+
+    private async Task PersistPreferencesAsync()
+    {
+        try
+        {
+            var payload = new ColumnPreferenceState
+            {
+                ShowHiddenCategories = showHiddenCategories,
+                ShowSystemDisplayName = showSystemDisplayColumn,
+                ShowCustomDisplayName = showCustomDisplayColumn,
+                ShowSortOrder = showSortOrderColumn,
+            };
+            await BrowserStorage.SetAsync(PreferenceStorageKey, payload);
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
 
     private async Task SetEnabledAsync(int categoryId, bool isEnabled)
     {
@@ -408,5 +517,13 @@ else
         {
             isBusy = false;
         }
+    }
+
+    private class ColumnPreferenceState
+    {
+        public bool ShowHiddenCategories { get; set; }
+        public bool ShowSystemDisplayName { get; set; } = true;
+        public bool ShowCustomDisplayName { get; set; } = true;
+        public bool ShowSortOrder { get; set; } = true;
     }
 }
