@@ -100,9 +100,6 @@ else
                                     </td>
                                     <td class="col-status">
                                         <div class="status-icons">
-                                            <span class="text-success" title="@(category.IsEnabled ? "Visas i menyer" : "Dold kategori")">
-                                                <i class="bi @(category.IsEnabled ? "bi-check-circle-fill" : "bi-eye-slash-fill")"></i>
-                                            </span>
                                             @if (category.IsSystemCategory)
                                             {
                                                 <span class="text-secondary" title="Systemkategori">
@@ -130,7 +127,7 @@ else
                                         else
                                         {
                                             <div class="btn-group btn-group-sm justify-content-end">
-                                                <button class="btn btn-outline-secondary"
+                                                <button class="btn btn-outline-secondary toggle-visibility @(category.IsEnabled ? "is-visible" : "is-hidden")"
                                                         title="@((category.IsEnabled ? "Dölj" : "Visa") + " kategori")"
                                                         disabled="@isBusy"
                                                         @onclick="() => SetEnabledAsync(category.Id, !category.IsEnabled)">

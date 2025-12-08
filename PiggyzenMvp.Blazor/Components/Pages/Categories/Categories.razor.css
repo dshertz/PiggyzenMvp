@@ -23,20 +23,29 @@
     width: 28%;
 }
 
-.categories-table .col-status {
+.categories-table .col-actions {
     width: 20%;
 }
 
-.categories-table .col-actions {
-    width: 20%;
+.categories-table .col-status {
+    width: 15%;
 }
 
 .categories-table .status-icons {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.35rem;
     color: #6c6f85;
     font-size: 1rem;
+    min-height: 24px;
+}
+
+.categories-table .btn-group-sm .toggle-visibility.is-visible i {
+    color: #1f8b4c;
+}
+
+.categories-table .btn-group-sm .toggle-visibility.is-hidden i {
+    color: #c23b22;
 }
 
 .categories-table .form-control-sm {
