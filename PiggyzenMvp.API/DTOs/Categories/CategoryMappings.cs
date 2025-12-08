@@ -16,8 +16,7 @@ public static class CategoryMappings
             category.DisplayName,
             category.UserDisplayName,
             category.IsSystemCategory,
-            category.IsActive,
-            category.IsHidden,
+            category.IsEnabled,
             category.SortOrder
         );
 
@@ -31,8 +30,7 @@ public static class CategoryMappings
             category.DisplayName,
             category.UserDisplayName,
             category.IsSystemCategory,
-            category.IsActive,
-            category.IsHidden,
+            category.IsEnabled,
             category.SortOrder
         );
 
@@ -48,7 +46,6 @@ public static class CategoryMappings
             UserDisplayName = null,
             SortOrder = sortOrder,
             IsSystemCategory = false,
-            IsActive = true,
-            IsHidden = false,
+            IsEnabled = true,
         };
 }

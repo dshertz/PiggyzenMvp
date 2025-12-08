@@ -122,16 +122,8 @@ namespace PiggyzenMvp.API.Controllers
                 c.UserDisplayName = string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
             }
 
-            if (dto.IsHidden.HasValue)
-                c.IsHidden = dto.IsHidden.Value;
-
-            if (dto.IsActive.HasValue)
-            {
-                if (c.IsSystemCategory && dto.IsActive == false)
-                    return BadRequest(new { Message = "System categories cannot be deactivated." });
-
-                c.IsActive = dto.IsActive.Value;
-            }
+            if (dto.IsEnabled.HasValue)
+                c.IsEnabled = dto.IsEnabled.Value;
 
             await _context.SaveChangesAsync(ct);
             return NoContent();

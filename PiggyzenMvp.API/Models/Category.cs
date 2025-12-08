@@ -9,8 +9,7 @@ namespace PiggyzenMvp.API.Models
         public required string DisplayName { get; set; }
         public string? UserDisplayName { get; set; }
         public bool IsSystemCategory { get; set; } = false;
-        public bool IsActive { get; set; } = true;
-        public bool IsHidden { get; set; } = false;
+        public bool IsEnabled { get; set; } = true;
         public int SortOrder { get; set; }
     }
 }

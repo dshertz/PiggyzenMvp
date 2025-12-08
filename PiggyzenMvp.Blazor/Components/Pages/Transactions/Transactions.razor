@@ -1133,7 +1133,7 @@ else
                 DisplayName = g.DisplayName,
                 SortOrder = g.SortOrder,
                 Categories = g.Categories
-                    .Where(c => c.IsActive && !c.IsHidden)
+                    .Where(c => c.IsEnabled)
                     .OrderBy(c => c.SortOrder)
                     .ToList()
             })

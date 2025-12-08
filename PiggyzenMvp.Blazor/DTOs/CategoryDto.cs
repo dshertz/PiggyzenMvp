@@ -21,8 +21,7 @@ public class CategoryDto
     public string DisplayName { get; set; } = "";
     public string? UserDisplayName { get; set; }
     public bool IsSystemCategory { get; set; }
-    public bool IsActive { get; set; }
-    public bool IsHidden { get; set; }
+    public bool IsEnabled { get; set; }
     public int SortOrder { get; set; }
 
     public string EffectiveName =>

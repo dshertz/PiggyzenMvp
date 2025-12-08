@@ -9,8 +9,7 @@ public record CategoryDetailDto(
     string DisplayName,
     string? UserDisplayName,
     bool IsSystemCategory,
-    bool IsActive,
-    bool IsHidden,
+    bool IsEnabled,
     int SortOrder
 )
 {

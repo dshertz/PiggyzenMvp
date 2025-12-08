@@ -70,8 +70,7 @@ public class CategorySeeder
                     UserDisplayName = seed.DefaultUserDisplayName,
                     SortOrder = seed.SortOrder,
                     IsSystemCategory = true,
-                    IsActive = true,
-                    IsHidden = false,
+                    IsEnabled = true,
                 };
                 _context.Categories.Add(category);
             }
@@ -81,10 +80,6 @@ public class CategorySeeder
                     category.DisplayName = seed.DisplayName;
                 if (category.SortOrder != seed.SortOrder)
                     category.SortOrder = seed.SortOrder;
-                if (!category.IsActive)
-                    category.IsActive = true;
-                if (category.IsHidden)
-                    category.IsHidden = false;
                 if (
                     string.IsNullOrWhiteSpace(category.UserDisplayName)
                     && !string.IsNullOrWhiteSpace(seed.DefaultUserDisplayName)

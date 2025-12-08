@@ -1,0 +1,62 @@
+.categories-table-wrapper {
+    border-radius: 12px;
+    border: 1px solid rgba(18, 11, 36, 0.08);
+    background: #fff;
+}
+
+.categories-table {
+    white-space: nowrap;
+    font-size: 0.95rem;
+}
+
+.categories-table thead th {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #1f1f2e;
+}
+
+.categories-table .col-display {
+    width: 32%;
+}
+
+.categories-table .col-user-display {
+    width: 28%;
+}
+
+.categories-table .col-status {
+    width: 20%;
+}
+
+.categories-table .col-actions {
+    width: 20%;
+}
+
+.categories-table .status-icons {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #6c6f85;
+    font-size: 1rem;
+}
+
+.categories-table .form-control-sm {
+    min-width: 180px;
+    font-size: 0.9rem;
+}
+
+.categories-table .category-name {
+    font-weight: 500;
+    color: #2d2f3b;
+}
+
+.categories-table .btn-group-sm .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+}
+
+.categories-table tbody td {
+    font-weight: 400;
+    color: #3a3d4d;
+}
