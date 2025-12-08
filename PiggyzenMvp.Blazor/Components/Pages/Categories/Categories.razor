@@ -42,7 +42,7 @@ else
                     <thead class="table-light text-uppercase small">
                         <tr>
                             <th class="col-display">DisplayName</th>
-                            <th class="col-user-display">UserDisplayName</th>
+                            <th class="col-user-display">CustomDisplayName</th>
                             <th class="col-status">Status</th>
                             <th class="col-actions text-end">Åtgärder</th>
                         </tr>
@@ -84,9 +84,9 @@ else
                                                        title="Systemnamn: @category.DisplayName"
                                                        placeholder="Visningsnamn" />
                                             }
-                                            else if (!string.IsNullOrWhiteSpace(category.UserDisplayName))
+                                            else if (!string.IsNullOrWhiteSpace(category.CustomDisplayName))
                                             {
-                                                <span class="category-name">@category.UserDisplayName</span>
+                                                <span class="category-name">@category.CustomDisplayName</span>
                                             }
                                             else
                                             {
@@ -258,7 +258,7 @@ else
             var client = HttpClientFactory.CreateClient("ApiClient");
             var req = new CreateCategoryRequest
             {
-                DisplayName = createModel.DisplayName.Trim(),
+                SystemDisplayName = createModel.DisplayName.Trim(),
                 GroupId = groupId,
             };
 
@@ -282,8 +282,8 @@ else
     {
         editingCategoryId = category.Id;
         editModel.DisplayName = category.IsSystemCategory
-            ? category.UserDisplayName ?? ""
-            : category.DisplayName;
+            ? category.CustomDisplayName ?? ""
+            : category.SystemDisplayName;
     }
 
     private void CancelEdit()
@@ -307,8 +307,8 @@ else
 
             var req = new UpdateCategoryRequest
             {
-                DisplayName = !isSystemCategory ? editModel.DisplayName.Trim() : null,
-                UserDisplayName = isSystemCategory ? editModel.DisplayName : null,
+                SystemDisplayName = !isSystemCategory ? editModel.DisplayName.Trim() : null,
+                CustomDisplayName = isSystemCategory ? editModel.DisplayName : null,
             };
 
             var resp = await client.PutAsJsonAsync($"api/categories/{categoryId}", req);
@@ -369,14 +369,14 @@ else
 
     private class CreateCategoryRequest
     {
-        public string DisplayName { get; set; } = "";
+        public string SystemDisplayName { get; set; } = "";
         public int GroupId { get; set; }
     }
 
     private class UpdateCategoryRequest
     {
-        public string? DisplayName { get; set; }
-        public string? UserDisplayName { get; set; }
+        public string? SystemDisplayName { get; set; }
+        public string? CustomDisplayName { get; set; }
         public bool? IsEnabled { get; set; }
     }
 

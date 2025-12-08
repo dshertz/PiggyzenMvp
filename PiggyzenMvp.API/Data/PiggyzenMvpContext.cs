@@ -37,8 +37,8 @@ namespace PiggyzenMvp.API.Data
                 .Entity<Category>()
                 .HasIndex(c => new { c.GroupId, c.Key })
                 .IsUnique();
-            modelBuilder.Entity<Category>().Property(c => c.DisplayName).HasMaxLength(128);
-            modelBuilder.Entity<Category>().Property(c => c.UserDisplayName).HasMaxLength(128);
+            modelBuilder.Entity<Category>().Property(c => c.SystemDisplayName).HasMaxLength(128);
+            modelBuilder.Entity<Category>().Property(c => c.CustomDisplayName).HasMaxLength(128);
             modelBuilder.Entity<Category>().Property(c => c.Key).HasMaxLength(128);
 
             // Transaction ↔ CategorizationUsage (1:1)

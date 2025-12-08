@@ -18,12 +18,16 @@ public class CategoryDto
     public string GroupKey { get; set; } = "";
     public string GroupDisplayName { get; set; } = "";
     public string Key { get; set; } = "";
-    public string DisplayName { get; set; } = "";
-    public string? UserDisplayName { get; set; }
+    public string SystemDisplayName { get; set; } = "";
+    public string? CustomDisplayName { get; set; }
     public bool IsSystemCategory { get; set; }
     public bool IsEnabled { get; set; }
     public int SortOrder { get; set; }
 
-    public string EffectiveName =>
-        string.IsNullOrWhiteSpace(UserDisplayName) ? DisplayName : UserDisplayName!;
+    public string DisplayName =>
+        string.IsNullOrWhiteSpace(CustomDisplayName)
+            ? SystemDisplayName
+            : CustomDisplayName!;
+
+    public string EffectiveName => DisplayName;
 }

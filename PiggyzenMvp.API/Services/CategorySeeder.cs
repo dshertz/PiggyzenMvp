@@ -66,8 +66,8 @@ public class CategorySeeder
                 {
                     GroupId = seed.GroupId,
                     Key = seed.Key,
-                    DisplayName = seed.DisplayName,
-                    UserDisplayName = seed.DefaultUserDisplayName,
+                    SystemDisplayName = seed.DisplayName,
+                    CustomDisplayName = seed.DefaultUserDisplayName,
                     SortOrder = seed.SortOrder,
                     IsSystemCategory = true,
                     IsEnabled = true,
@@ -76,16 +76,16 @@ public class CategorySeeder
             }
             else
             {
-                if (category.DisplayName != seed.DisplayName)
-                    category.DisplayName = seed.DisplayName;
+                if (category.SystemDisplayName != seed.DisplayName)
+                    category.SystemDisplayName = seed.DisplayName;
                 if (category.SortOrder != seed.SortOrder)
                     category.SortOrder = seed.SortOrder;
                 if (
-                    string.IsNullOrWhiteSpace(category.UserDisplayName)
+                    string.IsNullOrWhiteSpace(category.CustomDisplayName)
                     && !string.IsNullOrWhiteSpace(seed.DefaultUserDisplayName)
                 )
                 {
-                    category.UserDisplayName = seed.DefaultUserDisplayName;
+                    category.CustomDisplayName = seed.DefaultUserDisplayName;
                 }
             }
         }
