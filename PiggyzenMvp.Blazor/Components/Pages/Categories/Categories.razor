@@ -8,22 +8,18 @@
 
 <h2 class="mb-3">Kategorier</h2>
 
-<div class="d-flex flex-wrap align-items-center gap-3 mb-4">
-    <label class="form-check form-switch d-flex align-items-center mb-0">
-        <input class="form-check-input" type="checkbox" role="switch" @bind="showHiddenCategories" @bind:after="OnPreferencesChanged" />
-        <span class="ms-2">Visa dolda kategorier</span>
-    </label>
-    <small class="text-muted">Använd filtret för att visa kategorier som stängts av.</small>
-</div>
-
 <div class="mb-3 column-toggle-container">
     <button class="btn btn-sm btn-outline-secondary"
             type="button"
             @onclick="ToggleColumnMenu">
-        Kolumner
+        Visningsalternativ
         <span class="ms-1 bi @(isColumnMenuOpen ? "bi-chevron-up" : "bi-chevron-down")"></span>
     </button>
     <div class="column-toggle-menu @(isColumnMenuOpen ? "open" : string.Empty)">
+        <label class="form-check form-switch d-flex align-items-center mb-2">
+            <input class="form-check-input" type="checkbox" role="switch" @bind="showHiddenCategories" @bind:after="OnPreferencesChanged" />
+            <span class="ms-2">Visa dolda kategorier</span>
+        </label>
         <label class="form-check form-switch d-flex align-items-center mb-2">
             <input class="form-check-input" type="checkbox" role="switch" @bind="showSystemDisplayColumn" @bind:after="OnPreferencesChanged" />
             <span class="ms-2">SystemDisplayName</span>
