@@ -13,11 +13,10 @@ public static class CategoryMappings
             category.Group?.Key ?? string.Empty,
             category.Group?.DisplayName ?? string.Empty,
             category.Key,
-            category.DisplayName,
-            category.UserDisplayName,
+            category.SystemDisplayName,
+            category.CustomDisplayName,
             category.IsSystemCategory,
-            category.IsActive,
-            category.IsHidden,
+            category.IsEnabled,
             category.SortOrder
         );
 
@@ -28,11 +27,10 @@ public static class CategoryMappings
             category.Group?.Key ?? string.Empty,
             category.Group?.DisplayName ?? string.Empty,
             category.Key,
-            category.DisplayName,
-            category.UserDisplayName,
+            category.SystemDisplayName,
+            category.CustomDisplayName,
             category.IsSystemCategory,
-            category.IsActive,
-            category.IsHidden,
+            category.IsEnabled,
             category.SortOrder
         );
 
@@ -44,11 +42,10 @@ public static class CategoryMappings
         {
             GroupId = req.GroupId,
             Key = key,
-            DisplayName = req.DisplayName.Trim(),
-            UserDisplayName = null,
+            SystemDisplayName = req.SystemDisplayName.Trim(),
+            CustomDisplayName = null,
             SortOrder = sortOrder,
             IsSystemCategory = false,
-            IsActive = true,
-            IsHidden = false,
+            IsEnabled = true,
         };
 }

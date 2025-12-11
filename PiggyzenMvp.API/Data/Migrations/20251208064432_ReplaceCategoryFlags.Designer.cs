@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PiggyzenMvp.API.Data;
 
@@ -10,9 +11,11 @@ using PiggyzenMvp.API.Data;
 namespace PiggyzenMvp.API.Data.Migrations
 {
     [DbContext(typeof(PiggyzenMvpContext))]
-    partial class PiggyzenMvpContextModelSnapshot : ModelSnapshot
+    [Migration("20251208064432_ReplaceCategoryFlags")]
+    partial class ReplaceCategoryFlags
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.7");
@@ -109,7 +112,8 @@ namespace PiggyzenMvp.API.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("CustomDisplayName")
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
@@ -130,8 +134,7 @@ namespace PiggyzenMvp.API.Data.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("SystemDisplayName")
-                        .IsRequired()
+                    b.Property<string>("UserDisplayName")
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 

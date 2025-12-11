@@ -33,7 +33,7 @@ namespace PiggyzenMvp.API.Controllers
                 {
                     var categories = group.Categories
                         .OrderBy(c => c.SortOrder)
-                        .ThenBy(c => c.DisplayName)
+                        .ThenBy(c => c.CustomDisplayName ?? c.SystemDisplayName)
                         .Select(c =>
                         {
                             c.Group = group;
@@ -65,7 +65,7 @@ namespace PiggyzenMvp.API.Controllers
             CancellationToken ct = default
         )
         {
-            if (string.IsNullOrWhiteSpace(dto.DisplayName))
+            if (string.IsNullOrWhiteSpace(dto.SystemDisplayName))
                 return BadRequest(new { Message = "DisplayName is required." });
 
             var group = await _context.CategoryGroups.FirstOrDefaultAsync(
@@ -77,7 +77,7 @@ namespace PiggyzenMvp.API.Controllers
 
             var slug = await _slugService.GenerateUniqueSlugAsync(
                 dto.GroupId,
-                dto.DisplayName,
+                dto.SystemDisplayName,
                 ct
             );
             var nextSort =
@@ -108,30 +108,22 @@ namespace PiggyzenMvp.API.Controllers
             if (c is null)
                 return NotFound();
 
-            if (!string.IsNullOrWhiteSpace(dto.DisplayName))
+            if (!string.IsNullOrWhiteSpace(dto.SystemDisplayName))
             {
                 if (c.IsSystemCategory)
                     return BadRequest(new { Message = "System categories cannot change DisplayName." });
 
-                c.DisplayName = dto.DisplayName.Trim();
+                c.SystemDisplayName = dto.SystemDisplayName.Trim();
             }
 
-            if (dto.UserDisplayName != null)
+            if (dto.CustomDisplayName != null)
             {
-                var trimmed = dto.UserDisplayName.Trim();
-                c.UserDisplayName = string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+                var trimmed = dto.CustomDisplayName.Trim();
+                c.CustomDisplayName = string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
             }
 
-            if (dto.IsHidden.HasValue)
-                c.IsHidden = dto.IsHidden.Value;
-
-            if (dto.IsActive.HasValue)
-            {
-                if (c.IsSystemCategory && dto.IsActive == false)
-                    return BadRequest(new { Message = "System categories cannot be deactivated." });
-
-                c.IsActive = dto.IsActive.Value;
-            }
+            if (dto.IsEnabled.HasValue)
+                c.IsEnabled = dto.IsEnabled.Value;
 
             await _context.SaveChangesAsync(ct);
             return NoContent();

@@ -46,7 +46,7 @@ public class TransactionsController : ControllerBase
                 CategoryId = t.CategoryId,
                 CategoryName = t.Category == null
                     ? null
-                    : (t.Category.UserDisplayName ?? t.Category.DisplayName),
+                    : (t.Category.CustomDisplayName ?? t.Category.SystemDisplayName),
 
                 TypeId = t.Category == null ? (int?)null : t.Category.GroupId,
 

@@ -4,8 +4,28 @@
 @using System.Net.Http.Json
 @using PiggyzenMvp.Blazor.DTOs
 @inject IHttpClientFactory HttpClientFactory
+@inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedLocalStorage BrowserStorage
 
-<h2 class="mb-4">Kategorier</h2>
+<h2 class="mb-3">Kategorier</h2>
+
+<div class="mb-3 column-toggle-container">
+    <button class="btn btn-sm btn-outline-secondary"
+            type="button"
+            @onclick="ToggleColumnMenu">
+        Visningsalternativ
+        <span class="ms-1 bi @(isColumnMenuOpen ? "bi-chevron-up" : "bi-chevron-down")"></span>
+    </button>
+    <div class="column-toggle-menu @(isColumnMenuOpen ? "open" : string.Empty)">
+        <label class="form-check form-switch d-flex align-items-center mb-2">
+            <input class="form-check-input" type="checkbox" role="switch" @bind="showHiddenCategories" @bind:after="OnPreferencesChanged" />
+            <span class="ms-2">Visa dolda kategorier</span>
+        </label>
+        <label class="form-check form-switch d-flex align-items-center mb-2">
+            <input class="form-check-input" type="checkbox" role="switch" @bind="showSystemDisplayColumn" @bind:after="OnPreferencesChanged" />
+            <span class="ms-2">Visa systemnamn (SystemDisplayName)</span>
+        </label>
+    </div>
+</div>
 
 @if (!string.IsNullOrWhiteSpace(errorMessage))
 {
@@ -21,127 +41,157 @@ else
     @foreach (var group in groups)
     {
         <div class="mt-4">
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex justify-content-between align-items-center mb-2">
                 <h3 class="fw-semibold mb-0">@group.DisplayName</h3>
-                @if (creatingGroupId != group.Id)
-                {
-                    <button class="btn btn-sm btn-outline-primary"
-                            @onclick="() => StartCreate(group.Id)">
-                        + Lägg till kategori
-                    </button>
-                }
             </div>
 
-            <ul class="list-group list-group-flush mt-2">
-                @foreach (var category in group.Categories.OrderBy(c => c.SortOrder).ThenBy(c => c.DisplayName))
-                {
-                    <li class="list-group-item px-0">
-                        @if (editingCategoryId == category.Id)
+            @{
+                var visibleCategories = GetVisibleCategories(group).ToList();
+            }
+
+            <div class="table-responsive categories-table-wrapper">
+                <table class="table table-bordered table-striped table-sm categories-table mb-0">
+                    <thead class="table-light text-uppercase small">
+                        <tr>
+                            <th class="col-display">DisplayName</th>
+                            @if (showSystemDisplayColumn)
+                            {
+                                <th class="col-system-display">SystemDisplayName</th>
+                            }
+                            <th class="col-actions text-end">Åtgärder</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (visibleCategories.Count == 0)
                         {
-                            <div class="border rounded p-3 shadow-sm bg-white">
-                                <div class="mb-3">
-                                    <label class="form-label">
-                                        @(category.IsSystemCategory ? "Visningsnamn (lämna tomt för standard)" : "Namn")
-                                    </label>
-                                    <input class="form-control"
-                                           @bind="editModel.DisplayName" />
-                                </div>
-                                <div class="form-check mb-3">
-                                    <input class="form-check-input"
-                                           type="checkbox"
-                                           id="hide-@category.Id"
-                                           @bind="editModel.IsHidden" />
-                                    <label class="form-check-label" for="hide-@category.Id">
-                                        Dölj kategori vid val
-                                    </label>
-                                </div>
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-primary" disabled="@isBusy"
-                                            @onclick="() => SaveEditAsync(category.Id, category.IsSystemCategory)">
-                                        Spara
-                                    </button>
-                                    <button class="btn btn-secondary" disabled="@isBusy" @onclick="CancelEdit">
-                                        Avbryt
-                                    </button>
-                                    @if (!category.IsSystemCategory)
-                                    {
-                                        <button class="btn btn-outline-danger ms-auto" disabled="@isBusy"
-                                                @onclick="() => DeleteCategoryAsync(category.Id)">
-                                            Ta bort
-                                        </button>
-                                    }
-                                </div>
-                            </div>
+                            <tr>
+                                <td colspan="@GetTableColumnSpan()" class="text-muted py-4 text-center">
+                                    Inga kategorier visas med valt filter.
+                                </td>
+                            </tr>
                         }
                         else
                         {
-                            <div class="d-flex justify-content-between align-items-center py-1">
-                                <div>
-                                    <span class="fs-6">@category.EffectiveName</span>
-                                    @if (category.IsSystemCategory)
+                            @foreach (var category in visibleCategories)
+                            {
+                                var isEditing = editingCategoryId == category.Id;
+                                <tr class="categories-row @(isEditing ? "table-active" : string.Empty)">
+                                    <td class="col-display">
+                                        @if (isEditing)
+                                        {
+                                            <input class="form-control form-control-sm"
+                                                   @bind="editModel.DisplayName"
+                                                   placeholder="Namn" />
+                                        }
+                                        else
+                                        {
+                                            <span class="category-name">@category.DisplayName</span>
+                                        }
+                                    </td>
+                                    @if (showSystemDisplayColumn)
                                     {
-                                        <span class="badge bg-light text-dark ms-2">System</span>
+                                        <td class="col-system-display">
+                                            @category.SystemDisplayName
+                                        </td>
                                     }
-                                    @if (category.IsHidden)
-                                    {
-                                        <span class="badge bg-warning text-dark ms-2">Dold</span>
-                                    }
-                                </div>
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-sm btn-outline-secondary"
-                                            @onclick="() => StartEdit(category)">
-                                        Redigera
-                                    </button>
-                                    @if (!category.IsSystemCategory)
-                                    {
-                                        <button class="btn btn-sm btn-outline-danger"
-                                                @onclick="() => DeleteCategoryAsync(category.Id)">
-                                            Ta bort
-                                        </button>
-                                    }
-                                </div>
-                            </div>
+                                    <td class="text-end col-actions">
+                                        @if (isEditing)
+                                        {
+                                            <div class="btn-group btn-group-sm justify-content-end">
+                                                <button class="btn btn-primary"
+                                                        disabled="@isBusy"
+                                                        @onclick="() => SaveEditAsync(category.Id)">
+                                                    Spara
+                                                </button>
+                                                <button class="btn btn-outline-secondary"
+                                                        disabled="@isBusy"
+                                                        @onclick="CancelEdit">
+                                                    Avbryt
+                                                </button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="btn-group btn-group-sm justify-content-end">
+                                                <button class="btn btn-outline-secondary toggle-visibility @(category.IsEnabled ? "is-visible" : "is-hidden")"
+                                                        title="@((category.IsEnabled ? "Dölj" : "Visa") + " kategori")"
+                                                        disabled="@isBusy"
+                                                        @onclick="() => SetEnabledAsync(category.Id, !category.IsEnabled)">
+                                                    <i class="bi @(category.IsEnabled ? "bi-eye" : "bi-eye-slash")"></i>
+                                                </button>
+                                                <button class="btn btn-outline-secondary"
+                                                        title="Redigera"
+                                                        @onclick="() => StartEdit(category)">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                @if (category.IsSystemCategory)
+                                                {
+                                                    <span class="d-inline-block"
+                                                          title="Systemkategori kan inte tas bort">
+                                                        <button class="btn btn-outline-danger"
+                                                                disabled>
+                                                            <i class="bi bi-lock-fill"></i>
+                                                        </button>
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <button class="btn btn-outline-danger"
+                                                            title="Ta bort"
+                                                            @onclick="() => DeleteCategoryAsync(category.Id)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
                         }
-                    </li>
-                }
 
-                <li class="list-group-item px-0">
-                    @if (creatingGroupId == group.Id)
-                    {
-                        <div class="border rounded p-3 shadow-sm bg-white">
-                            <div class="mb-3">
-                                <label class="form-label">Namn</label>
-                                <input class="form-control"
-                                       @bind="createModel.DisplayName" />
-                            </div>
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-primary" disabled="@isBusy"
-                                        @onclick="() => CreateCategoryAsync(group.Id)">
-                                    Skapa
-                                </button>
-                                <button class="btn btn-secondary" disabled="@isBusy" @onclick="CancelCreate">
-                                    Avbryt
-                                </button>
-                            </div>
-                        </div>
-                    }
-                    else
-                    {
-                        <button class="btn btn-sm btn-outline-primary mt-2"
-                                @onclick="() => StartCreate(group.Id)">
-                            + Ny kategori
-                        </button>
-                    }
-                </li>
-            </ul>
+                        <tr>
+                            <td colspan="@GetTableColumnSpan()">
+                                @if (creatingGroupId == group.Id)
+                                {
+                                    <div class="d-flex gap-3 align-items-center">
+                                        <input class="form-control form-control-sm"
+                                               placeholder="SystemDisplayName"
+                                               @bind="createModel.SystemDisplayName" />
+                                        <div class="ms-auto d-flex gap-2">
+                                            <button class="btn btn-sm btn-primary" disabled="@isBusy"
+                                                    @onclick="() => CreateCategoryAsync(group.Id)">
+                                                Skapa
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary" disabled="@isBusy" @onclick="CancelCreate">
+                                                Avbryt
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-primary"
+                                            @onclick="() => StartCreate(group.Id)">
+                                        + Ny kategori
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     }
 }
 
 @code {
+    private const string PreferenceStorageKey = "categories_table_preferences";
     private List<CategoryGroupDto> groups = new();
     private bool isBusy;
     private string? errorMessage;
+    private bool showHiddenCategories;
+    private bool isColumnMenuOpen;
+    private bool showSystemDisplayColumn = true;
 
     private int? editingCategoryId;
     private int? creatingGroupId;
@@ -149,7 +199,11 @@ else
     private readonly CreateCategoryModel createModel = new();
     private readonly EditCategoryModel editModel = new();
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreferencesAsync();
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -164,7 +218,6 @@ else
                 .Select(g =>
                 {
                     g.Categories = g.Categories
-                        .Where(c => c.IsActive)
                         .OrderBy(c => c.SortOrder)
                         .ThenBy(c => c.DisplayName)
                         .ToList();
@@ -187,18 +240,18 @@ else
     private void StartCreate(int groupId)
     {
         creatingGroupId = groupId;
-        createModel.DisplayName = "";
+        createModel.SystemDisplayName = "";
     }
 
     private void CancelCreate()
     {
         creatingGroupId = null;
-        createModel.DisplayName = "";
+        createModel.SystemDisplayName = "";
     }
 
     private async Task CreateCategoryAsync(int groupId)
     {
-        if (string.IsNullOrWhiteSpace(createModel.DisplayName))
+        if (string.IsNullOrWhiteSpace(createModel.SystemDisplayName))
         {
             errorMessage = "Ange ett namn.";
             return;
@@ -210,7 +263,7 @@ else
             var client = HttpClientFactory.CreateClient("ApiClient");
             var req = new CreateCategoryRequest
             {
-                DisplayName = createModel.DisplayName.Trim(),
+                SystemDisplayName = createModel.SystemDisplayName.Trim(),
                 GroupId = groupId,
             };
 
@@ -233,27 +286,17 @@ else
     private void StartEdit(CategoryDto category)
     {
         editingCategoryId = category.Id;
-        editModel.DisplayName = category.IsSystemCategory
-            ? category.UserDisplayName ?? ""
-            : category.DisplayName;
-        editModel.IsHidden = category.IsHidden;
+        editModel.DisplayName = category.DisplayName;
     }
 
     private void CancelEdit()
     {
         editingCategoryId = null;
         editModel.DisplayName = "";
-        editModel.IsHidden = false;
     }
 
-    private async Task SaveEditAsync(int categoryId, bool isSystemCategory)
+    private async Task SaveEditAsync(int categoryId)
     {
-        if (!isSystemCategory && string.IsNullOrWhiteSpace(editModel.DisplayName))
-        {
-            errorMessage = "Ange ett namn.";
-            return;
-        }
-
         try
         {
             isBusy = true;
@@ -261,9 +304,7 @@ else
 
             var req = new UpdateCategoryRequest
             {
-                IsHidden = editModel.IsHidden,
-                DisplayName = !isSystemCategory ? editModel.DisplayName.Trim() : null,
-                UserDisplayName = isSystemCategory ? editModel.DisplayName : null,
+                CustomDisplayName = editModel.DisplayName,
             };
 
             var resp = await client.PutAsJsonAsync($"api/categories/{categoryId}", req);
@@ -314,25 +355,103 @@ else
 
     private class CreateCategoryModel
     {
-        public string DisplayName { get; set; } = "";
+        public string SystemDisplayName { get; set; } = "";
     }
 
     private class EditCategoryModel
     {
         public string DisplayName { get; set; } = "";
-        public bool IsHidden { get; set; }
     }
 
     private class CreateCategoryRequest
     {
-        public string DisplayName { get; set; } = "";
+        public string SystemDisplayName { get; set; } = "";
         public int GroupId { get; set; }
     }
 
     private class UpdateCategoryRequest
     {
-        public string? DisplayName { get; set; }
-        public string? UserDisplayName { get; set; }
-        public bool? IsHidden { get; set; }
+        public string? SystemDisplayName { get; set; }
+        public string? CustomDisplayName { get; set; }
+        public bool? IsEnabled { get; set; }
+    }
+
+    private IEnumerable<CategoryDto> GetVisibleCategories(CategoryGroupDto group) =>
+        group.Categories
+            .Where(c => showHiddenCategories || c.IsEnabled)
+            .OrderBy(c => c.IsEnabled ? 0 : 1)
+            .ThenBy(c => c.SortOrder)
+            .ThenBy(c => c.DisplayName);
+
+    private void ToggleColumnMenu() => isColumnMenuOpen = !isColumnMenuOpen;
+
+    private int GetTableColumnSpan() => 2 + (showSystemDisplayColumn ? 1 : 0);
+
+    private async Task LoadPreferencesAsync()
+    {
+        try
+        {
+            var result = await BrowserStorage.GetAsync<ColumnPreferenceState>(PreferenceStorageKey);
+            if (result.Success && result.Value is ColumnPreferenceState prefs)
+            {
+                showHiddenCategories = prefs.ShowHiddenCategories;
+                showSystemDisplayColumn = prefs.ShowSystemDisplayName;
+            }
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
+
+    private Task OnPreferencesChanged() => PersistPreferencesAsync();
+
+    private async Task PersistPreferencesAsync()
+    {
+        try
+        {
+            var payload = new ColumnPreferenceState
+            {
+                ShowHiddenCategories = showHiddenCategories,
+                ShowSystemDisplayName = showSystemDisplayColumn,
+            };
+            await BrowserStorage.SetAsync(PreferenceStorageKey, payload);
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
+
+    private async Task SetEnabledAsync(int categoryId, bool isEnabled)
+    {
+        try
+        {
+            isBusy = true;
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            var req = new UpdateCategoryRequest
+            {
+                IsEnabled = isEnabled,
+            };
+
+            var resp = await client.PutAsJsonAsync($"api/categories/{categoryId}", req);
+            if (!resp.IsSuccessStatusCode)
+            {
+                errorMessage = $"Kunde inte uppdatera status: {(int)resp.StatusCode}";
+                return;
+            }
+
+            await LoadAsync();
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private class ColumnPreferenceState
+    {
+        public bool ShowHiddenCategories { get; set; }
+        public bool ShowSystemDisplayName { get; set; } = true;
     }
 }

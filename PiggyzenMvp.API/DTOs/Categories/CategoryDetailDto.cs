@@ -6,13 +6,12 @@ public record CategoryDetailDto(
     string GroupKey,
     string GroupDisplayName,
     string Key,
-    string DisplayName,
-    string? UserDisplayName,
+    string SystemDisplayName,
+    string? CustomDisplayName,
     bool IsSystemCategory,
-    bool IsActive,
-    bool IsHidden,
+    bool IsEnabled,
     int SortOrder
 )
 {
-    public string EffectiveName => UserDisplayName ?? DisplayName;
+    public string DisplayName => CustomDisplayName ?? SystemDisplayName;
 }
