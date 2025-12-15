@@ -1,0 +1,61 @@
+@using PiggyzenMvp.Blazor.DTOs.Transactions
+@namespace PiggyzenMvp.Blazor.Components.Shared.Transactions
+
+<table class="table table-bordered table-striped transactions-table">
+    <thead>
+        <tr>
+            <th class="col-select text-center align-middle">
+                <input type="checkbox"
+                       class="form-check-input select-checkbox"
+                       @onchange="HandleSelectAllChanged"
+                       checked="@AreAllSelected" />
+            </th>
+            <th class="col-date">Datum</th>
+            <th>Beskrivning</th>
+            <th class="col-amount text-end">Belopp</th>
+            <th class="col-balance text-end">Saldo</th>
+            <th>Group</th>
+            <th class="col-category">Kategori</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var tx in Transactions)
+        {
+            var isActive = IsTransactionSelected?.Invoke(tx) ?? false;
+            <tr @key="tx.Id">
+                <td class="text-center">
+                    <input type="checkbox"
+                           class="form-check-input select-checkbox"
+                           checked="@isActive"
+                           @onchange="e => HandleSelectionChanged(tx.Id, e)" />
+                </td>
+                <td>@tx.TransactionDate.ToShortDateString()</td>
+                <td>@tx.Description</td>
+                <td class="text-end">@tx.Amount.ToString("F2")</td>
+                <td class="text-end">@(tx.Balance?.ToString("F2") ?? "-")</td>
+                <td>@(tx.TypeName ?? "—")</td>
+                <td>@(tx.CategoryName ?? "Ej vald")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter] public IReadOnlyList<TransactionDto> Transactions { get; set; } = Array.Empty<TransactionDto>();
+    [Parameter] public bool AreAllSelected { get; set; }
+    [Parameter] public Func<TransactionDto, bool>? IsTransactionSelected { get; set; }
+    [Parameter] public EventCallback<TransactionSelectionChange> OnTransactionSelectionChanged { get; set; }
+    [Parameter] public EventCallback<bool> OnSelectAllChanged { get; set; }
+
+    private Task HandleSelectionChanged(int transactionId, ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool b && b;
+        return OnTransactionSelectionChanged.InvokeAsync(new TransactionSelectionChange(transactionId, isChecked));
+    }
+
+    private Task HandleSelectAllChanged(ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool b && b;
+        return OnSelectAllChanged.InvokeAsync(isChecked);
+    }
+}

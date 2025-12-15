@@ -1,0 +1,262 @@
+.analysis-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    color: #E6E6E6;
+    background: #242526;
+}
+
+.analysis-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.analysis-kicker {
+    text-transform: uppercase;
+    letter-spacing: 0.4em;
+    font-size: 0.75rem;
+    color: #BCAAFE;
+}
+
+.analysis-subtitle {
+    max-width: 480px;
+    color: #CCCCCC;
+}
+
+.analysis-date-section {
+    background: #292A2B;
+    border: 1px solid #222223;
+    border-radius: 16px;
+    padding: 1rem;
+}
+
+.analysis-drilldown-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.analysis-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+}
+
+.breadcrumb-root {
+    font-weight: 600;
+}
+
+.breadcrumb-link {
+    border: none;
+    background: none;
+    color: #FFCC95;
+    padding: 0;
+}
+
+.breadcrumb-active {
+    color: #6FE7D2;
+}
+
+.breadcrumb-separator {
+    font-size: 1rem;
+    color: #757575;
+}
+
+.analysis-back-btn {
+    align-self: flex-start;
+    border: none;
+    background: #3E4250;
+    color: #E6E6E6;
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.analysis-card {
+    background: #292A2B;
+    border: 1px solid #222223;
+    border-radius: 18px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.analysis-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.analysis-card-title {
+    margin: 0;
+    font-size: 0.95rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #E6E6E6;
+}
+
+.analysis-card-subtitle {
+    margin: 0;
+    color: #CCCCCC;
+    font-size: 0.8rem;
+}
+
+.analysis-donut-wrapper {
+    min-height: 220px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.analysis-donut {
+    width: 100%;
+    max-width: 240px;
+    height: auto;
+}
+
+.analysis-donut-center {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    pointer-events: none;
+    text-align: center;
+}
+
+.analysis-donut-center strong {
+    font-size: 1.05rem;
+}
+
+.analysis-donut-center span {
+    font-size: 0.75rem;
+    color: #999;
+}
+
+.analysis-donut-empty {
+    color: #777;
+    font-size: 0.85rem;
+}
+
+.analysis-donut-segment {
+    transition: transform 0.2s ease;
+    cursor: pointer;
+}
+
+.analysis-donut-segment.active {
+    transform: scale(1.02);
+}
+
+.analysis-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.analysis-empty {
+    padding: 1.2rem;
+    text-align: center;
+    color: #7c7c95;
+}
+
+.analysis-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 12px;
+    border: 1px solid #3E4250;
+    background: transparent;
+    color: #E6E6E6;
+    text-align: left;
+}
+
+.analysis-list-item.active {
+    border-color: #B084EB;
+    background: rgba(176, 132, 235, 0.1);
+}
+
+.analysis-list-item-info {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.analysis-list-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.analysis-list-label {
+    font-weight: 600;
+}
+
+.analysis-list-metrics {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 0.8rem;
+    color: #CCCCCC;
+}
+
+.analysis-list-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.analysis-list-percent {
+    color: #7c7c95;
+}
+
+.analysis-table-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.transactions-status-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    border-top: 1px solid #222223;
+    background: #292A2B;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    color: #E6E6E6;
+}
+
+.transactions-status-bar strong {
+    color: #FFCC95;
+}
+
+@media (max-width: 768px) {
+    .analysis-page {
+        padding: 1rem;
+    }
+
+    .analysis-grid {
+        grid-template-columns: 1fr;
+    }
+}

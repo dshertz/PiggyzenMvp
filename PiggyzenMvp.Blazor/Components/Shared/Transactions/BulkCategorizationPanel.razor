@@ -1,0 +1,157 @@
+@using PiggyzenMvp.Blazor.DTOs
+@namespace PiggyzenMvp.Blazor.Components.Shared.Transactions
+
+@if (SelectedCount <= 0)
+{
+    return;
+}
+
+<div class="bulk-categorization" role="alert">
+    <div class="bulk-categorization-header">
+        <div class="bulk-categorization-summary">
+            <div>
+                <strong>@SelectedCount</strong> transaktion(er) markerade.
+            </div>
+            @if (!string.IsNullOrWhiteSpace(SelectedCategoryDisplayName))
+            {
+                <div class="bulk-categorization-current">
+                    Vald kategori: <span>@SelectedCategoryDisplayName</span>
+                </div>
+            }
+        </div>
+        <div class="bulk-categorization-actions">
+            <button class="btn btn-primary"
+                    @onclick="OnCategorize"
+                    disabled="@IsActionDisabled">
+                @(IsProcessing ? "Kategoriserar..." : $"Kategorisera {SelectedCount}")
+            </button>
+            <button class="btn btn-link text-decoration-none" type="button" @onclick="OnClearSelection">
+                Rensa markering
+            </button>
+        </div>
+    </div>
+    <div class="bulk-categorization-menu-wrapper">
+        <div class="bulk-categorization-menu">
+            <div class="bulk-category-search">
+                <input class="bulk-category-search-input"
+                       placeholder="Sök kategori…"
+                       value="@BulkCategorySearchText"
+                       @oninput="HandleSearchInput" />
+                <button type="button"
+                        class="bulk-category-search-clear @(string.IsNullOrWhiteSpace(BulkCategorySearchText) ? "invisible" : string.Empty)"
+                        title="Rensa söktext"
+                        aria-label="Rensa söktext"
+                        @onclick="ClearSearch">
+                    <span class="bi bi-x-circle"></span>
+                </button>
+            </div>
+            @{
+                var filteredGroups = FilteredGroupViews.ToList();
+            }
+            <div class="bulk-category-list">
+                @if (filteredGroups.Count == 0)
+                {
+                    <div class="bulk-category-empty">Inga kategorier matchar din sökning.</div>
+                }
+                else
+                {
+                    @foreach (var group in filteredGroups)
+                    {
+                        <section class="bulk-category-list-group">
+                            <header class="bulk-category-list-group-title">@group.DisplayName</header>
+                            @foreach (var category in group.Categories)
+                            {
+                                var isActive = ActiveCategoryId.HasValue && ActiveCategoryId.Value == category.Id;
+                                <button type="button"
+                                        class="bulk-category-list-item @(isActive ? "active" : string.Empty)"
+                                        @onclick="() => ToggleCategory(category.Id)">
+                                    @CategoryLabel(category)
+                                </button>
+                            }
+                        </section>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int SelectedCount { get; set; }
+    [Parameter] public bool IsProcessing { get; set; }
+    [Parameter] public bool IsActionDisabled { get; set; }
+    [Parameter] public string BulkCategorySearchText { get; set; } = string.Empty;
+    [Parameter] public int? ActiveCategoryId { get; set; }
+    [Parameter] public IEnumerable<CategoryGroupDto> CategoryGroups { get; set; } = Array.Empty<CategoryGroupDto>();
+    [Parameter] public Func<CategoryDto, string>? CategoryLabelSelector { get; set; }
+    [Parameter] public Func<CategoryGroupDto, string>? GroupLabelSelector { get; set; }
+    [Parameter] public string? SelectedCategoryDisplayName { get; set; }
+
+    [Parameter] public EventCallback OnCategorize { get; set; }
+    [Parameter] public EventCallback OnClearSelection { get; set; }
+    [Parameter] public EventCallback<string> OnSearchTextChanged { get; set; }
+    [Parameter] public EventCallback OnClearSearch { get; set; }
+    [Parameter] public EventCallback<int?> OnCategoryToggled { get; set; }
+
+    private IEnumerable<BulkCategoryGroupView> FilteredGroupViews
+    {
+        get
+        {
+            var groups = CategoryGroups
+                .Select(g => new BulkCategoryGroupView(
+                    GroupLabelSelector?.Invoke(g) ?? g.DisplayName,
+                    g.Categories))
+                .ToList();
+
+            if (string.IsNullOrWhiteSpace(BulkCategorySearchText))
+            {
+                return groups;
+            }
+
+            var query = BulkCategorySearchText.Trim();
+            return groups
+                .Select(view => new BulkCategoryGroupView(
+                    view.DisplayName,
+                    view.Categories
+                        .Where(c =>
+                            CategoryLabel(c)
+                                .Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                            (c.GroupDisplayName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                        .ToList()))
+                .Where(view => view.Categories.Count > 0)
+                .ToList();
+        }
+    }
+
+    private string CategoryLabel(CategoryDto category) =>
+        CategoryLabelSelector?.Invoke(category) ?? category.EffectiveName;
+
+    private void ToggleCategory(int categoryId)
+    {
+        int? next = ActiveCategoryId == categoryId ? null : categoryId;
+        _ = OnCategoryToggled.InvokeAsync(next);
+    }
+
+    private Task HandleSearchInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? string.Empty;
+        return OnSearchTextChanged.InvokeAsync(value);
+    }
+
+    private Task ClearSearch()
+    {
+        if (string.IsNullOrWhiteSpace(BulkCategorySearchText))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (OnClearSearch.HasDelegate)
+        {
+            return OnClearSearch.InvokeAsync();
+        }
+
+        return OnSearchTextChanged.InvokeAsync(string.Empty);
+    }
+
+    private sealed record BulkCategoryGroupView(string DisplayName, List<CategoryDto> Categories);
+}
