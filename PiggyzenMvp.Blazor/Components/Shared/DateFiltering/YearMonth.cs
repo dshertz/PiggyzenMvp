@@ -1,6 +1,6 @@
 using System;
 
-namespace PiggyzenMvp.Blazor.Components.Pages.Transactions;
+namespace PiggyzenMvp.Blazor.Components.Shared.DateFiltering;
 
 public readonly record struct YearMonth(int Year, int Month)
 {

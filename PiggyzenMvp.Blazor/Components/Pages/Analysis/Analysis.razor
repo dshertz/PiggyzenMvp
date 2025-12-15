@@ -1,0 +1,1258 @@
+@page "/analysis"
+@rendermode InteractiveServer
+@using System.Globalization
+@using System.Linq
+@using System.Collections.Generic
+@using PiggyzenMvp.Blazor.Components.Shared.DateFiltering
+@using PiggyzenMvp.Blazor.Components.Shared.Transactions
+@using PiggyzenMvp.Blazor.DTOs
+@using PiggyzenMvp.Blazor.Services
+@inject IHttpClientFactory HttpClientFactory
+@inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedLocalStorage BrowserStorage
+@inject TransactionBulkCategorizer BulkCategorizer
+@inject AnalysisFilterState FilterState
+
+<section class="analysis-page">
+    <!-- Header and date filter (placeholder) -->
+    <header class="analysis-header">
+        <div>
+            <p class="analysis-kicker">Transaktioner</p>
+            <h1>Analys</h1>
+            <p class="analysis-subtitle">En översikt över dina utgifter och inkomster.</p>
+        </div>
+    </header>
+
+    <div class="analysis-date-section">
+        <DateFilterBar DateFilterMode="@dateFilterMode"
+                       IsDateMultiSelect="@isDateMultiSelect"
+                       IsDateControlsDisabled="@IsDateControlsDisabled"
+                       IsPeriodNavigationDisabled="@IsPeriodNavigationDisabled"
+                       CurrentPeriodLabel="@CurrentPeriodLabel"
+                       OnJumpToCurrentPeriod="JumpToCurrentPeriod"
+                       OnDateFilterModeChanged="SetDateFilterMode"
+                       OnToggleDateMultiSelect="ToggleDateMultiSelect"
+                       OnClearDateFilters="ClearDateFilters"
+                       OnStepPeriod="StepPeriod"
+                       YearOptions="@YearOptions"
+                       MonthOptions="@MonthOptions"
+                       OnYearSelectionToggled="ToggleYearSelection"
+                       OnMonthSelectionToggled="ToggleMonthSelection"
+                       YearButtonClassSelector="GetYearButtonClass"
+                       MonthButtonClassSelector="GetMonthButtonClass"
+                       MonthLabelSelector="GetMonthLabel" />
+    </div>
+
+    <div class="analysis-drilldown-section">
+        <div class="analysis-breadcrumb">
+            <span class="breadcrumb-root">Analys</span>
+            @if (selectedGroupId is not null)
+            {
+                <span class="breadcrumb-separator">/</span>
+                <button type="button" class="breadcrumb-link" @onclick="() => SetSelectedGroup(null)">
+                    @SelectedGroupLabel
+                </button>
+            }
+            @if (selectedCategoryId is not null)
+            {
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-active">@SelectedCategoryLabel</span>
+            }
+        </div>
+        @if (selectedGroupId is not null)
+        {
+            <button class="analysis-back-btn" type="button" @onclick="ResetDrilldown">Visa grupper</button>
+        }
+        <div class="analysis-grid">
+            <article class="analysis-card">
+                <header class="analysis-card-header">
+                    <div>
+                        <p class="analysis-card-title">Drilldown</p>
+                        <p class="analysis-card-subtitle">Klicka på en segment för att borra ner.</p>
+                    </div>
+                </header>
+                <div class="analysis-donut-wrapper">
+                    @if (DonutSegments.Count == 0)
+                    {
+                        <div class="analysis-donut-empty">Inga transaktioner för den valda perioden.</div>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 220 220" class="analysis-donut">
+                            @foreach (var segment in DonutSegments)
+                            {
+                                <path class="@GetDonutSegmentClass(segment.Slice)"
+                                      d="@segment.PathData"
+                                      fill="@segment.Slice.Color"
+                                      @onclick="() => HandleSliceClicked(segment.Slice)" />
+                            }
+                        </svg>
+                        <div class="analysis-donut-center">
+                            <strong>@(selectedGroupId is null ? "Kategorier" : SelectedGroupLabel ?? "Analys")</strong>
+                            <span>@(selectedGroupId == UncategorizedGroupId ? "Ej kategoriserade transaktioner" : "Klicka för att filtrera")</span>
+                        </div>
+                    }
+                </div>
+            </article>
+            <article class="analysis-card analysis-list-card">
+                <header class="analysis-card-header">
+                    <div>
+                        <p class="analysis-card-title">Detaljerad lista</p>
+                        <p class="analysis-card-subtitle">Lista över de segment som visas.</p>
+                    </div>
+                </header>
+                <div class="analysis-list">
+                    @if (!CurrentChartSlices.Any())
+                    {
+                        <div class="analysis-empty">Inga segment att visa.</div>
+                    }
+                    else
+                    {
+                        @foreach (var slice in CurrentChartSlices)
+                        {
+                            var percent = TotalSliceValue > 0 ? (slice.Value / TotalSliceValue * 100m) : 0m;
+                            <button type="button"
+                                    class="@GetListItemClass(slice)"
+                                    @onclick="() => HandleSliceClicked(slice)">
+                                <div class="analysis-list-item-info">
+                                    <span class="analysis-list-color" style="background:@slice.Color"></span>
+                                    <span class="analysis-list-label">@slice.Label</span>
+                                </div>
+                                <div class="analysis-list-metrics">
+                                    <span class="analysis-list-value">@FormatCurrency(slice.Value)</span>
+                                    <span class="analysis-list-percent">@($"{percent:F1}%")</span>
+                                </div>
+                            </button>
+                        }
+                    }
+                </div>
+            </article>
+        </div>
+    </div>
+
+    <div class="analysis-table-section">
+        <BulkCategorizationPanel SelectedCount="@selectedTransactionIds.Count"
+                                 IsProcessing="@isBulkCategorizing"
+                                 IsActionDisabled="@IsBulkActionDisabled"
+                                 BulkCategorySearchText="@bulkCategorySearchText"
+                                 ActiveCategoryId="@bulkCategoryId"
+                                 CategoryGroups="@categoryGroups"
+                                 SelectedCategoryDisplayName="@GetSelectedBulkCategoryName()"
+                                 OnCategorize="CategorizeSelectedAsync"
+                                 OnClearSelection="ClearSelection"
+                                 OnSearchTextChanged="OnBulkCategorySearchInput"
+                                 OnClearSearch="ClearBulkCategorySearch"
+                                 OnCategoryToggled="HandleBulkCategoryToggled" />
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="alert alert-success" role="alert">@successMessage</div>
+        }
+
+        @if (transactions is null)
+        {
+            <p><em>Laddar...</em></p>
+        }
+        else if (FilteredTransactions.Count == 0)
+        {
+            <p>Inga transaktioner matchar filtren.</p>
+        }
+        else
+        {
+            <TransactionsTable Transactions="FilteredTransactions"
+                               AreAllSelected="@AreAllFilteredSelected"
+                               IsTransactionSelected="IsSelected"
+                               OnTransactionSelectionChanged="HandleTransactionSelectionChanged"
+                               OnSelectAllChanged="HandleSelectAllChanged" />
+        }
+
+        <div class="transactions-status-bar">
+            <span>Kategoriserade: <strong>@CategorizedCount</strong></span>
+            <span>Ej kategoriserade: <strong>@UncategorizedCount</strong></span>
+            <span>Totalt: <strong>@TotalTransactions</strong></span>
+        </div>
+    </div>
+</section>
+
+@code {
+    private const string FilterStateKey = "analysis_filter_state";
+    private const int UncategorizedGroupId = -1;
+    private const string UncategorizedKey = "uncategorized";
+
+    private List<TransactionDto>? transactions;
+    private List<CategoryDto> categories = new();
+    private List<CategoryGroupDto> categoryGroups = new();
+    private Dictionary<int, HashSet<int>> groupCategoryMap = new();
+    private readonly HashSet<int> selectedTransactionIds = new();
+    private int? bulkCategoryId;
+    private bool isBulkCategorizing;
+    private string? errorMessage;
+    private string? successMessage;
+    private string bulkCategorySearchText = string.Empty;
+
+    private DateFilterMode dateFilterMode = DateFilterMode.Monthly;
+    private bool isDateMultiSelect;
+    private HashSet<int> selectedYears = new();
+    private HashSet<YearMonth> selectedYearMonths = new();
+    private int? activeYear;
+    private int? activeMonth;
+    private List<int> availableYears = new();
+    private List<YearMonth> availableYearMonths = new();
+    private static readonly CultureInfo SwedishCulture = CultureInfo.GetCultureInfo("sv-SE");
+
+    private int? selectedGroupId;
+    private int? selectedCategoryId;
+
+    private static readonly Dictionary<string, string> GroupColorMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["income"] = "#FFCC95",
+        ["housing"] = "#FF9AC1",
+        ["vehicle"] = "#6FC1FF",
+        ["fixed-expenses"] = "#6FE7D2",
+        ["variable-expenses"] = "#BCAAFE",
+        ["transfers"] = "#FF4B82",
+        [UncategorizedKey] = "#E6E6E6"
+    };
+
+    private static readonly Dictionary<string, string> DrilldownColorMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["income"] = "#FFB86C",
+        ["housing"] = "#FF75B5",
+        ["vehicle"] = "#45A9F9",
+        ["fixed-expenses"] = "#19f9d8",
+        ["variable-expenses"] = "#B084EB",
+        ["transfers"] = "#FF2C6D",
+        [UncategorizedKey] = "#CDCDCD"
+    };
+
+    private IReadOnlyList<TransactionDto> DateFilteredTransactions =>
+        transactions?.Where(MatchesDateFilter).ToList() ?? new();
+
+    private List<TransactionDto> FilteredTransactions =>
+        DateFilteredTransactions
+            .Where(MatchesDrilldown)
+            .OrderByDescending(t => t.TransactionDate)
+            .ToList();
+
+    private IReadOnlyList<DonutSegment> DonutSegments => BuildDonutSegments();
+
+    private IReadOnlyList<AnalysisSlice> CurrentChartSlices =>
+        selectedGroupId is null
+            ? GetGroupSlices()
+            : selectedGroupId == UncategorizedGroupId
+                ? GetUncategorizedSlice()
+                : GetCategorySlicesForGroup(selectedGroupId.Value);
+
+    private decimal TotalSliceValue => CurrentChartSlices.Sum(s => s.Value);
+
+    private bool AreAllFilteredSelected
+    {
+        get
+        {
+            var filtered = FilteredTransactions;
+            if (filtered.Count == 0)
+                return false;
+            return filtered.All(t => selectedTransactionIds.Contains(t.Id));
+        }
+    }
+
+    private bool IsSelected(TransactionDto tx) => selectedTransactionIds.Contains(tx.Id);
+
+    private int CategorizedCount => FilteredTransactions.Count(tx => tx.CategoryId != null);
+    private int UncategorizedCount => FilteredTransactions.Count(tx => tx.CategoryId == null);
+    private int TotalTransactions => FilteredTransactions.Count;
+
+    private IEnumerable<int> YearOptions => availableYears.OrderByDescending(y => y);
+    private IEnumerable<YearMonth> MonthOptions =>
+        availableYearMonths.OrderByDescending(p => p.Year).ThenByDescending(p => p.Month);
+
+    private bool HasPeriodData => availableYearMonths.Count > 0;
+    private bool HasActiveSinglePeriod =>
+        dateFilterMode == DateFilterMode.Yearly
+            ? activeYear.HasValue
+            : dateFilterMode == DateFilterMode.Monthly
+                ? activeYear.HasValue && activeMonth.HasValue
+                : true;
+
+    private bool IsDateControlsDisabled => dateFilterMode == DateFilterMode.All || !HasPeriodData;
+
+    private bool IsPeriodNavigationDisabled =>
+        dateFilterMode == DateFilterMode.All || isDateMultiSelect || !HasActiveSinglePeriod;
+
+    private string CurrentPeriodLabel => dateFilterMode switch
+    {
+        DateFilterMode.All => "Alla datum",
+        DateFilterMode.Yearly => activeYear?.ToString() ?? "Välj år",
+        DateFilterMode.Monthly => activeYear.HasValue && activeMonth.HasValue
+            ? new DateTime(activeYear.Value, activeMonth.Value, 1)
+                .ToString("MMMM yyyy", SwedishCulture)
+            : "Välj månad",
+        _ => "Alla datum"
+    };
+
+    private bool IsBulkActionDisabled =>
+        isBulkCategorizing || bulkCategoryId is null || selectedTransactionIds.Count == 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadFilterStateAsync();
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            await Task.WhenAll(
+                LoadTransactionsAsync(client),
+                LoadCategoriesAsync(client)
+            );
+            BuildGroupCategoryMap();
+            RefreshAvailablePeriods();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Fel vid analysdata: {ex.Message}");
+            transactions = new();
+            categories = new();
+            errorMessage = "Kunde inte läsa in analysdata.";
+        }
+    }
+
+    private Task HandleTransactionSelectionChanged(TransactionSelectionChange change)
+    {
+        if (change.IsChecked)
+        {
+            selectedTransactionIds.Add(change.TransactionId);
+        }
+        else
+        {
+            selectedTransactionIds.Remove(change.TransactionId);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleSelectAllChanged(bool isSelected)
+    {
+        var filtered = FilteredTransactions;
+        if (isSelected)
+        {
+            foreach (var tx in filtered)
+            {
+                selectedTransactionIds.Add(tx.Id);
+            }
+        }
+        else
+        {
+            foreach (var tx in filtered)
+            {
+                selectedTransactionIds.Remove(tx.Id);
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnBulkCategorySearchInput(string? value)
+    {
+        bulkCategorySearchText = value ?? string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private Task HandleBulkCategoryToggled(int? categoryId)
+    {
+        bulkCategoryId = categoryId;
+        return Task.CompletedTask;
+    }
+
+    private void ClearBulkCategorySearch()
+    {
+        if (string.IsNullOrWhiteSpace(bulkCategorySearchText))
+        {
+            return;
+        }
+
+        bulkCategorySearchText = string.Empty;
+    }
+
+    private void ClearSelection()
+    {
+        selectedTransactionIds.Clear();
+    }
+
+    private async Task CategorizeSelectedAsync()
+    {
+        if (transactions is null)
+            return;
+
+        if (bulkCategoryId is null || selectedTransactionIds.Count == 0)
+            return;
+
+        isBulkCategorizing = true;
+        successMessage = null;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var selected = transactions
+                .Where(t => selectedTransactionIds.Contains(t.Id))
+                .ToList();
+
+            var result = await BulkCategorizer.CategorizeAsync(selected, bulkCategoryId.Value);
+
+            var failedIds = result.Errors.Select(e => e.TransactionId).ToHashSet();
+
+            foreach (var tx in selected)
+            {
+                if (failedIds.Contains(tx.Id))
+                {
+                    continue;
+                }
+
+                tx.CategoryId = bulkCategoryId;
+                UpdateCategoryFields(tx);
+                selectedTransactionIds.Remove(tx.Id);
+            }
+
+            var successParts = new List<string>();
+            if (result.Categorized > 0)
+                successParts.Add($"Kategoriserade {result.Categorized} transaktion(er)");
+            if (result.Updated > 0)
+                successParts.Add($"Uppdaterade {result.Updated} transaktion(er)");
+            if (result.AutoCategorized > 0)
+                successParts.Add($"Auto-kategoriserade {result.AutoCategorized} liknande transaktion(er)");
+
+            successMessage = successParts.Count > 0 ? string.Join(". ", successParts) + "." : null;
+
+            var anyChanges = result.Categorized > 0 || result.Updated > 0 || result.AutoCategorized > 0;
+            if (anyChanges)
+            {
+                await RefreshTransactionsAsync();
+                selectedTransactionIds.Clear();
+            }
+
+            if (result.Errors.Count > 0)
+            {
+                var errorList = string.Join(
+                    ", ",
+                    result.Errors.Select(e => $"{e.TransactionId}: {e.Message}")
+                );
+                errorMessage = $"Vissa transaktioner kunde inte hanteras: {errorList}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBulkCategorizing = false;
+            StateHasChanged();
+        }
+    }
+
+    private void UpdateCategoryFields(TransactionDto tx)
+    {
+        var category = tx.CategoryId is int id
+            ? categories.FirstOrDefault(c => c.Id == id)
+            : null;
+
+        if (category is null)
+        {
+            tx.CategoryId = null;
+            tx.CategoryName = null;
+            tx.TypeId = null;
+            tx.TypeName = null;
+            return;
+        }
+
+        tx.CategoryName = category.EffectiveName;
+        tx.TypeId = category.GroupId;
+        tx.TypeName = category.GroupDisplayName;
+    }
+
+    private void BuildGroupCategoryMap()
+    {
+        groupCategoryMap = categoryGroups
+            .ToDictionary(
+                group => group.Id,
+                group => group.Categories.Select(c => c.Id).ToHashSet());
+    }
+
+    private void HandleSliceClicked(AnalysisSlice slice)
+    {
+        if (selectedGroupId is null)
+        {
+            SetSelectedGroup(slice.GroupId);
+            return;
+        }
+
+        if (selectedGroupId == UncategorizedGroupId)
+        {
+            return;
+        }
+
+        if (slice.CategoryId is int categoryId)
+        {
+            SetSelectedCategory(categoryId);
+        }
+    }
+
+    private void SetSelectedGroup(int? groupId)
+    {
+        if (selectedGroupId == groupId)
+            return;
+
+        selectedGroupId = groupId;
+        selectedCategoryId = null;
+        UpdateDrilldownState();
+    }
+
+    private void SetSelectedCategory(int categoryId)
+    {
+        if (selectedGroupId is null || selectedGroupId == UncategorizedGroupId)
+            return;
+
+        selectedCategoryId = categoryId;
+        UpdateDrilldownState();
+    }
+
+    private void ResetDrilldown()
+    {
+        selectedGroupId = null;
+        selectedCategoryId = null;
+        UpdateDrilldownState();
+    }
+
+    private void UpdateDrilldownState()
+    {
+        FilterState.SelectedGroupId = selectedGroupId;
+        FilterState.SelectedCategoryId = selectedCategoryId;
+        _ = SaveFilterStateAsync();
+    }
+
+    private IReadOnlyList<AnalysisSlice> GetGroupSlices()
+    {
+        var filtered = DateFilteredTransactions;
+        var slices = categoryGroups
+            .Select(group =>
+            {
+                var amount = filtered
+                    .Where(tx => tx.CategoryId is int categoryId && groupCategoryMap.TryGetValue(group.Id, out var ids) && ids.Contains(categoryId))
+                    .Sum(tx => Math.Abs(tx.Amount));
+                return new AnalysisSlice(group.Id, CategoryId: null, group.DisplayName, amount, GetGroupColor(group.Key), group.Key);
+            })
+            .Where(slice => slice.Value > 0)
+            .ToList();
+
+        var uncategorizedTotal = filtered.Where(tx => tx.CategoryId == null).Sum(tx => Math.Abs(tx.Amount));
+        slices.Add(new AnalysisSlice(UncategorizedGroupId, null, "Ej kategoriserade", uncategorizedTotal, GetGroupColor(UncategorizedKey), UncategorizedKey));
+        return slices.Where(slice => slice.Value > 0).ToList();
+    }
+
+    private IReadOnlyList<AnalysisSlice> GetCategorySlicesForGroup(int groupId)
+    {
+        var filtered = DateFilteredTransactions;
+        var group = categoryGroups.FirstOrDefault(g => g.Id == groupId);
+        if (group is null || !groupCategoryMap.TryGetValue(group.Id, out var ids))
+        {
+            return new List<AnalysisSlice>();
+        }
+
+        return group.Categories
+            .Select(category =>
+            {
+                var amount = filtered
+                    .Where(tx => tx.CategoryId == category.Id)
+                    .Sum(tx => Math.Abs(tx.Amount));
+                return new AnalysisSlice(group.Id, category.Id, category.EffectiveName, amount, GetDrilldownColor(group.Key), group.Key);
+            })
+            .Where(slice => slice.Value > 0)
+            .ToList();
+    }
+
+    private IReadOnlyList<AnalysisSlice> GetUncategorizedSlice()
+    {
+        var filtered = DateFilteredTransactions;
+        var total = filtered.Where(tx => tx.CategoryId == null).Sum(tx => Math.Abs(tx.Amount));
+        if (total <= 0)
+        {
+            return new List<AnalysisSlice>();
+        }
+
+        return new List<AnalysisSlice>
+        {
+            new(UncategorizedGroupId, null, "Ej kategoriserade", total, GetDrilldownColor(UncategorizedKey), UncategorizedKey)
+        };
+    }
+
+    private IReadOnlyList<DonutSegment> BuildDonutSegments()
+    {
+        var slices = CurrentChartSlices.Where(s => s.Value > 0).ToList();
+        var total = slices.Sum(s => s.Value);
+        if (total <= 0)
+        {
+            return Array.Empty<DonutSegment>();
+        }
+
+        var segments = new List<DonutSegment>();
+        var angle = 0.0;
+        foreach (var slice in slices)
+        {
+            var sweep = (double)(slice.Value / total) * 360.0;
+            if (sweep <= 0)
+            {
+                continue;
+            }
+
+            var path = BuildDonutPath(angle, sweep);
+            segments.Add(new DonutSegment(path, slice));
+            angle += sweep;
+        }
+
+        return segments;
+    }
+
+    private static string BuildDonutPath(double startAngle, double sweepAngle)
+    {
+        const double center = 110.0;
+        const double outerRadius = 100.0;
+        const double innerRadius = 60.0;
+
+        var endAngle = startAngle + sweepAngle;
+
+        var outerStart = PolarToCartesian(center, outerRadius, startAngle);
+        var outerEnd = PolarToCartesian(center, outerRadius, endAngle);
+        var innerEnd = PolarToCartesian(center, innerRadius, endAngle);
+        var innerStart = PolarToCartesian(center, innerRadius, startAngle);
+
+        var largeArcFlag = sweepAngle > 180.0 ? 1 : 0;
+        var format = CultureInfo.InvariantCulture;
+
+        string FormatPoint((double X, double Y) point) =>
+            $"{point.X.ToString("F4", format)} {point.Y.ToString("F4", format)}";
+
+        var outerStartPoint = FormatPoint(outerStart);
+        var outerEndPoint = FormatPoint(outerEnd);
+        var innerEndPoint = FormatPoint(innerEnd);
+        var innerStartPoint = FormatPoint(innerStart);
+
+        var outerRadiusValue = outerRadius.ToString("F4", format);
+        var innerRadiusValue = innerRadius.ToString("F4", format);
+
+        return $"M {outerStartPoint} " +
+            $"A {outerRadiusValue} {outerRadiusValue} 0 {largeArcFlag} 1 {outerEndPoint} " +
+            $"L {innerEndPoint} " +
+            $"A {innerRadiusValue} {innerRadiusValue} 0 {largeArcFlag} 0 {innerStartPoint} Z";
+    }
+
+    private static (double X, double Y) PolarToCartesian(double center, double radius, double angle)
+    {
+        var radians = (angle - 90) * Math.PI / 180.0;
+        return (center + radius * Math.Cos(radians), center + radius * Math.Sin(radians));
+    }
+
+    private bool IsSliceActive(AnalysisSlice slice)
+    {
+        if (selectedGroupId is null)
+        {
+            return false;
+        }
+
+        if (selectedGroupId == UncategorizedGroupId)
+        {
+            return slice.GroupId == UncategorizedGroupId;
+        }
+
+        return slice.CategoryId is int categoryId && selectedCategoryId == categoryId;
+    }
+
+    private string FormatCurrency(decimal amount) =>
+        amount.ToString("C0", SwedishCulture);
+
+    private async Task LoadFilterStateAsync()
+    {
+        dateFilterMode = FilterState.DateMode;
+        isDateMultiSelect = FilterState.IsDateMultiSelect;
+        activeYear = FilterState.ActiveYear;
+        activeMonth = FilterState.ActiveMonth;
+        selectedYears = new HashSet<int>(FilterState.SelectedYears ?? new List<int>());
+        selectedYearMonths = FilterState.SelectedYearMonths?
+            .Select(value => YearMonth.TryParse(value, out var period) ? period : (YearMonth?)null)
+            .Where(p => p.HasValue)
+            .Select(p => p.Value)
+            .ToHashSet() ?? new HashSet<YearMonth>();
+        selectedGroupId = FilterState.SelectedGroupId;
+        selectedCategoryId = FilterState.SelectedCategoryId;
+
+        try
+        {
+            var result = await BrowserStorage.GetAsync<AnalysisFilterStatePayload>(FilterStateKey);
+            if (result.Success && result.Value is AnalysisFilterStatePayload state)
+            {
+                dateFilterMode = state.DateMode;
+                isDateMultiSelect = state.IsDateMultiSelect;
+                activeYear = state.ActiveYear;
+                activeMonth = state.ActiveMonth;
+                selectedYears = state.SelectedYears?.ToHashSet() ?? selectedYears;
+                selectedYearMonths = state.SelectedYearMonths?
+                    .Select(value => YearMonth.TryParse(value, out var period) ? period : (YearMonth?)null)
+                    .Where(p => p.HasValue)
+                    .Select(p => p.Value)
+                    .ToHashSet() ?? selectedYearMonths;
+                selectedGroupId = state.SelectedGroupId;
+                selectedCategoryId = state.SelectedCategoryId;
+
+                FilterState.DateMode = dateFilterMode;
+                FilterState.IsDateMultiSelect = isDateMultiSelect;
+                FilterState.ActiveYear = activeYear;
+                FilterState.ActiveMonth = activeMonth;
+                FilterState.SelectedYears = selectedYears.ToList();
+                FilterState.SelectedYearMonths = selectedYearMonths.Select(p => p.ToStorageKey()).ToList();
+                FilterState.SelectedGroupId = selectedGroupId;
+                FilterState.SelectedCategoryId = selectedCategoryId;
+            }
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
+
+    private async Task SaveFilterStateAsync()
+    {
+        FilterState.DateMode = dateFilterMode;
+        FilterState.IsDateMultiSelect = isDateMultiSelect;
+        FilterState.ActiveYear = activeYear;
+        FilterState.ActiveMonth = activeMonth;
+        FilterState.SelectedYears = selectedYears.ToList();
+        FilterState.SelectedYearMonths = selectedYearMonths.Select(p => p.ToStorageKey()).ToList();
+
+        var state = new AnalysisFilterStatePayload
+        {
+            DateMode = dateFilterMode,
+            IsDateMultiSelect = isDateMultiSelect,
+            ActiveYear = activeYear,
+            ActiveMonth = activeMonth,
+            SelectedYears = FilterState.SelectedYears,
+            SelectedYearMonths = FilterState.SelectedYearMonths,
+            SelectedGroupId = selectedGroupId,
+            SelectedCategoryId = selectedCategoryId
+        };
+
+        try
+        {
+            await BrowserStorage.SetAsync(FilterStateKey, state);
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
+
+    private async Task LoadTransactionsAsync(HttpClient client)
+    {
+        var data = await client.GetFromJsonAsync<List<TransactionDto>>("api/transactions");
+        transactions = data ?? new();
+    }
+
+    private async Task LoadCategoriesAsync(HttpClient client)
+    {
+        var data = await client.GetFromJsonAsync<List<CategoryGroupDto>>("api/categories") ?? new();
+        categoryGroups = data
+            .Select(g => new CategoryGroupDto
+            {
+                Id = g.Id,
+                Key = g.Key,
+                DisplayName = g.DisplayName,
+                SortOrder = g.SortOrder,
+                Categories = g.Categories
+                    .Where(c => c.IsEnabled)
+                    .OrderBy(c => c.SortOrder)
+                    .ToList()
+            })
+            .Where(g => g.Categories.Count > 0)
+            .OrderBy(g => g.SortOrder)
+            .ThenBy(g => g.DisplayName)
+            .ToList();
+
+        categories = categoryGroups
+            .SelectMany(g => g.Categories)
+            .OrderBy(c => c.GroupId)
+            .ThenBy(c => c.SortOrder)
+            .ToList();
+    }
+
+    private void RefreshAvailablePeriods()
+    {
+        if (transactions is null || transactions.Count == 0)
+        {
+            availableYears = new();
+            availableYearMonths = new();
+            activeYear = null;
+            activeMonth = null;
+            selectedYears.Clear();
+            selectedYearMonths.Clear();
+            dateFilterMode = DateFilterMode.All;
+            isDateMultiSelect = false;
+            return;
+        }
+
+        availableYears = transactions
+            .Select(t => t.TransactionDate.Year)
+            .Distinct()
+            .OrderBy(y => y)
+            .ToList();
+
+        availableYearMonths = transactions
+            .Select(t => new YearMonth(t.TransactionDate.Year, t.TransactionDate.Month))
+            .Distinct()
+            .OrderBy(p => p.Year)
+            .ThenBy(p => p.Month)
+            .ToList();
+
+        EnsurePeriodSelectionIsValid();
+    }
+
+    private void EnsurePeriodSelectionIsValid()
+    {
+        if (!HasPeriodData)
+            return;
+
+        var latest = availableYearMonths.Last();
+
+        if (!activeYear.HasValue || !availableYears.Contains(activeYear.Value))
+        {
+            activeYear = latest.Year;
+        }
+
+        if (dateFilterMode == DateFilterMode.Monthly)
+        {
+            var desired = activeYear.HasValue && activeMonth.HasValue
+                ? new YearMonth(activeYear.Value, activeMonth.Value)
+                : latest;
+
+            if (!availableYearMonths.Contains(desired))
+            {
+                var fallbacks = availableYearMonths.Where(p => p.Year == activeYear).ToList();
+                desired = fallbacks.Count > 0 ? fallbacks.Last() : latest;
+            }
+
+            activeYear = desired.Year;
+            activeMonth = desired.Month;
+        }
+        else if (dateFilterMode == DateFilterMode.Yearly)
+        {
+            activeMonth = null;
+        }
+
+        selectedYears.RemoveWhere(year => !availableYears.Contains(year));
+        selectedYearMonths.RemoveWhere(period => !availableYearMonths.Contains(period));
+
+        if (isDateMultiSelect)
+        {
+            if (dateFilterMode == DateFilterMode.Yearly && selectedYears.Count == 0 && activeYear.HasValue)
+            {
+                selectedYears.Add(activeYear.Value);
+            }
+            else if (dateFilterMode == DateFilterMode.Monthly &&
+                     selectedYearMonths.Count == 0 &&
+                     activeYear.HasValue &&
+                     activeMonth.HasValue)
+            {
+                selectedYearMonths.Add(new YearMonth(activeYear.Value, activeMonth.Value));
+            }
+        }
+    }
+
+    private void PruneSelection()
+    {
+        if (transactions is null || selectedTransactionIds.Count == 0)
+        {
+            return;
+        }
+
+        var filteredIds = FilteredTransactions.Select(t => t.Id).ToHashSet();
+        selectedTransactionIds.RemoveWhere(id => !filteredIds.Contains(id));
+    }
+
+    private void SetDateFilterMode(DateFilterMode mode)
+    {
+        if (dateFilterMode == mode)
+            return;
+
+        dateFilterMode = mode;
+        if (mode == DateFilterMode.All)
+        {
+            isDateMultiSelect = false;
+        }
+        else if (mode == DateFilterMode.Yearly)
+        {
+            activeMonth = null;
+        }
+
+        EnsurePeriodSelectionIsValid();
+        PruneSelection();
+        _ = SaveFilterStateAsync();
+    }
+
+    private void ToggleDateMultiSelect()
+    {
+        if (IsDateControlsDisabled)
+            return;
+
+        isDateMultiSelect = !isDateMultiSelect;
+        if (isDateMultiSelect)
+        {
+            SeedMultiSelectionFromActive();
+        }
+        else
+        {
+            if (dateFilterMode == DateFilterMode.Yearly)
+            {
+                if (selectedYears.Count > 0)
+                {
+                    activeYear = selectedYears.OrderByDescending(y => y).FirstOrDefault();
+                }
+                selectedYears.Clear();
+            }
+            else if (dateFilterMode == DateFilterMode.Monthly)
+            {
+                if (selectedYearMonths.Count > 0)
+                {
+                    var latest = selectedYearMonths
+                        .OrderBy(p => p.Year)
+                        .ThenBy(p => p.Month)
+                        .Last();
+                    activeYear = latest.Year;
+                    activeMonth = latest.Month;
+                }
+                selectedYearMonths.Clear();
+            }
+        }
+
+        PruneSelection();
+        _ = SaveFilterStateAsync();
+    }
+
+    private void ToggleYearSelection(int year)
+    {
+        if (dateFilterMode != DateFilterMode.Yearly || !availableYears.Contains(year))
+            return;
+
+        if (isDateMultiSelect)
+        {
+            if (!selectedYears.Add(year))
+                selectedYears.Remove(year);
+        }
+        else
+        {
+            activeYear = year;
+        }
+
+        PruneSelection();
+        _ = SaveFilterStateAsync();
+    }
+
+    private void ToggleMonthSelection(YearMonth option)
+    {
+        if (dateFilterMode != DateFilterMode.Monthly || !availableYearMonths.Contains(option))
+            return;
+
+        if (isDateMultiSelect)
+        {
+            if (!selectedYearMonths.Add(option))
+                selectedYearMonths.Remove(option);
+        }
+        else
+        {
+            activeYear = option.Year;
+            activeMonth = option.Month;
+        }
+
+        PruneSelection();
+        _ = SaveFilterStateAsync();
+    }
+
+    private void StepPeriod(int direction)
+    {
+        if (IsPeriodNavigationDisabled)
+            return;
+
+        if (dateFilterMode == DateFilterMode.Yearly && activeYear.HasValue)
+        {
+            var currentIndex = availableYears.IndexOf(activeYear.Value);
+            var nextIndex = currentIndex + direction;
+            if (nextIndex >= 0 && nextIndex < availableYears.Count)
+            {
+                activeYear = availableYears[nextIndex];
+            }
+        }
+        else if (dateFilterMode == DateFilterMode.Monthly && activeYear.HasValue && activeMonth.HasValue)
+        {
+            var current = new YearMonth(activeYear.Value, activeMonth.Value);
+            var currentIndex = availableYearMonths.IndexOf(current);
+            var nextIndex = currentIndex + direction;
+            if (nextIndex >= 0 && nextIndex < availableYearMonths.Count)
+            {
+                var target = availableYearMonths[nextIndex];
+                activeYear = target.Year;
+                activeMonth = target.Month;
+            }
+        }
+
+        PruneSelection();
+        _ = SaveFilterStateAsync();
+    }
+
+    private void ClearDateFilters()
+    {
+        if (!HasPeriodData)
+            return;
+
+        dateFilterMode = DateFilterMode.Monthly;
+        isDateMultiSelect = false;
+        var latest = availableYearMonths.Last();
+        activeYear = latest.Year;
+        activeMonth = latest.Month;
+        selectedYears.Clear();
+        selectedYearMonths.Clear();
+        EnsurePeriodSelectionIsValid();
+
+        PruneSelection();
+        _ = SaveFilterStateAsync();
+    }
+
+    private Task JumpToCurrentPeriod()
+    {
+        if (IsDateControlsDisabled)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (dateFilterMode == DateFilterMode.Yearly)
+        {
+            var targetYear = ResolvePreferredYear();
+            if (!targetYear.HasValue)
+            {
+                return Task.CompletedTask;
+            }
+
+            isDateMultiSelect = false;
+            selectedYears.Clear();
+            selectedYearMonths.Clear();
+            activeYear = targetYear.Value;
+            activeMonth = null;
+        }
+        else if (dateFilterMode == DateFilterMode.Monthly)
+        {
+            var targetMonth = ResolvePreferredMonth();
+            if (!targetMonth.HasValue)
+            {
+                return Task.CompletedTask;
+            }
+
+            isDateMultiSelect = false;
+            selectedYears.Clear();
+            selectedYearMonths.Clear();
+            activeYear = targetMonth.Value.Year;
+            activeMonth = targetMonth.Value.Month;
+        }
+
+        EnsurePeriodSelectionIsValid();
+        PruneSelection();
+        _ = SaveFilterStateAsync();
+        return Task.CompletedTask;
+    }
+
+    private int? ResolvePreferredYear()
+    {
+        if (availableYears.Count == 0)
+        {
+            return null;
+        }
+
+        var currentYear = DateTime.Today.Year;
+        if (availableYears.Contains(currentYear))
+        {
+            return currentYear;
+        }
+
+        return availableYears.Max();
+    }
+
+    private YearMonth? ResolvePreferredMonth()
+    {
+        if (availableYearMonths.Count == 0)
+        {
+            return null;
+        }
+
+        var current = new YearMonth(DateTime.Today.Year, DateTime.Today.Month);
+        if (availableYearMonths.Contains(current))
+        {
+            return current;
+        }
+
+        return availableYearMonths
+            .OrderByDescending(p => p.Year)
+            .ThenByDescending(p => p.Month)
+            .First();
+    }
+
+    private void SeedMultiSelectionFromActive()
+    {
+        if (dateFilterMode == DateFilterMode.Yearly && activeYear.HasValue)
+        {
+            selectedYears.Add(activeYear.Value);
+        }
+        else if (dateFilterMode == DateFilterMode.Monthly && activeYear.HasValue && activeMonth.HasValue)
+        {
+            selectedYearMonths.Add(new YearMonth(activeYear.Value, activeMonth.Value));
+        }
+    }
+
+    private string GetYearButtonClass(int year)
+    {
+        var isActive = isDateMultiSelect ? selectedYears.Contains(year) : activeYear == year;
+        return GetChipClass(isActive);
+    }
+
+    private string GetMonthButtonClass(YearMonth option)
+    {
+        var isActive = isDateMultiSelect
+            ? selectedYearMonths.Contains(option)
+            : activeYear == option.Year && activeMonth == option.Month;
+        return GetChipClass(isActive);
+    }
+
+    private static string GetMonthLabel(YearMonth option)
+    {
+        var date = new DateTime(option.Year, option.Month, 1);
+        var month = date.ToString("MMM", SwedishCulture).TrimEnd('.');
+        return month.ToLower(SwedishCulture);
+    }
+
+    private static string GetChipClass(bool isActive) =>
+        isActive ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-secondary";
+
+    private bool MatchesDrilldown(TransactionDto tx)
+    {
+        if (selectedCategoryId is int categoryId)
+        {
+            return tx.CategoryId == categoryId;
+        }
+
+        if (selectedGroupId == UncategorizedGroupId)
+        {
+            return tx.CategoryId == null;
+        }
+
+        if (selectedGroupId is int groupId && groupCategoryMap.TryGetValue(groupId, out var ids))
+        {
+            return tx.CategoryId is int id && ids.Contains(id);
+        }
+
+        return true;
+    }
+
+    private bool MatchesDateFilter(TransactionDto tx)
+    {
+        if (dateFilterMode == DateFilterMode.All)
+            return true;
+
+        var year = tx.TransactionDate.Year;
+        if (dateFilterMode == DateFilterMode.Yearly)
+        {
+            if (isDateMultiSelect)
+            {
+                return selectedYears.Count == 0 || selectedYears.Contains(year);
+            }
+
+            return !activeYear.HasValue || year == activeYear.Value;
+        }
+
+        var month = tx.TransactionDate.Month;
+        if (isDateMultiSelect)
+        {
+            return selectedYearMonths.Count == 0 || selectedYearMonths.Contains(new YearMonth(year, month));
+        }
+
+        if (!activeYear.HasValue || !activeMonth.HasValue)
+            return true;
+
+        return year == activeYear.Value && month == activeMonth.Value;
+    }
+
+    private async Task RefreshTransactionsAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            await LoadTransactionsAsync(client);
+            RefreshAvailablePeriods();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Fel vid uppdatering: {ex.Message}");
+            errorMessage = "Kunde inte uppdatera transaktionerna efter kategorisering.";
+        }
+    }
+
+    private static string GetGroupColor(string key) =>
+        GroupColorMap.TryGetValue(key, out var value) ? value : "#757575";
+
+    private static string GetDrilldownColor(string key) =>
+        DrilldownColorMap.TryGetValue(key, out var value) ? value : "#BBBBBB";
+
+    private string GetDonutSegmentClass(AnalysisSlice slice) =>
+        $"analysis-donut-segment {(IsSliceActive(slice) ? "active" : string.Empty)}";
+
+    private string GetListItemClass(AnalysisSlice slice) =>
+        $"analysis-list-item {(IsSliceActive(slice) ? "active" : string.Empty)}";
+
+    private string? SelectedGroupLabel
+    {
+        get
+        {
+            if (selectedGroupId is null)
+                return null;
+
+            if (selectedGroupId == UncategorizedGroupId)
+                return "Ej kategoriserade";
+
+            return categoryGroups.FirstOrDefault(g => g.Id == selectedGroupId)?.DisplayName;
+        }
+    }
+
+    private string? SelectedCategoryLabel =>
+        categories.FirstOrDefault(c => c.Id == selectedCategoryId)?.EffectiveName;
+
+    private string? GetSelectedBulkCategoryName()
+    {
+        if (bulkCategoryId is not int id)
+        {
+            return null;
+        }
+
+        var category = categories.FirstOrDefault(c => c.Id == id);
+        return category?.EffectiveName;
+    }
+
+    private sealed record AnalysisSlice(int GroupId, int? CategoryId, string Label, decimal Value, string Color, string GroupKey);
+    private sealed record DonutSegment(string PathData, AnalysisSlice Slice);
+
+    private sealed class AnalysisFilterStatePayload
+    {
+        public DateFilterMode DateMode { get; set; } = DateFilterMode.Monthly;
+        public bool IsDateMultiSelect { get; set; }
+        public int? ActiveYear { get; set; }
+        public int? ActiveMonth { get; set; }
+        public List<int>? SelectedYears { get; set; }
+        public List<string>? SelectedYearMonths { get; set; }
+        public int? SelectedGroupId { get; set; }
+        public int? SelectedCategoryId { get; set; }
+    }
+}

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.Http.Headers;
 using PiggyzenMvp.Blazor.Components;
+using PiggyzenMvp.Blazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,7 +36,9 @@ builder.Services.AddHttpClient(
         );
     }
 );
-builder.Services.AddScoped<PiggyzenMvp.Blazor.Services.TransactionFilterState>();
+builder.Services.AddScoped<TransactionFilterState>();
+builder.Services.AddScoped<TransactionBulkCategorizer>();
+builder.Services.AddScoped<AnalysisFilterState>();
 
 var app = builder.Build();
 

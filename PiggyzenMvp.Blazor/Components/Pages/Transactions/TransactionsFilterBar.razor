@@ -1,5 +1,6 @@
 @using System.Linq
 @using Microsoft.AspNetCore.Components.Web
+@using PiggyzenMvp.Blazor.Components.Shared.DateFiltering
 @using PiggyzenMvp.Blazor.Services
 @namespace PiggyzenMvp.Blazor.Components.Pages.Transactions
 
@@ -179,23 +180,23 @@
             }
         </div>
 
-        <TransactionsDateFilterControls DateFilterMode="@DateFilterMode"
-                                        IsDateMultiSelect="@IsDateMultiSelect"
-                                        IsDateControlsDisabled="@IsDateControlsDisabled"
-                                        IsPeriodNavigationDisabled="@IsPeriodNavigationDisabled"
-                                        CurrentPeriodLabel="@CurrentPeriodLabel"
-                                        OnJumpToCurrentPeriod="OnJumpToCurrentPeriod"
-                                        OnDateFilterModeChanged="OnDateFilterModeChanged"
-                                        OnToggleDateMultiSelect="OnToggleDateMultiSelect"
-                                        OnClearDateFilters="OnClearDateFilters"
-                                        OnStepPeriod="OnStepPeriod"
-                                        YearOptions="@YearOptions"
-                                        MonthOptions="@MonthOptions"
-                                        OnYearSelectionToggled="OnYearSelectionToggled"
-                                        OnMonthSelectionToggled="OnMonthSelectionToggled"
-                                        YearButtonClassSelector="@YearButtonClassSelector"
-                                        MonthButtonClassSelector="@MonthButtonClassSelector"
-                                        MonthLabelSelector="@MonthLabelSelector" />
+        <DateFilterBar DateFilterMode="@DateFilterMode"
+                       IsDateMultiSelect="@IsDateMultiSelect"
+                       IsDateControlsDisabled="@IsDateControlsDisabled"
+                       IsPeriodNavigationDisabled="@IsPeriodNavigationDisabled"
+                       CurrentPeriodLabel="@CurrentPeriodLabel"
+                       OnJumpToCurrentPeriod="OnJumpToCurrentPeriod"
+                       OnDateFilterModeChanged="OnDateFilterModeChanged"
+                       OnToggleDateMultiSelect="OnToggleDateMultiSelect"
+                       OnClearDateFilters="OnClearDateFilters"
+                       OnStepPeriod="OnStepPeriod"
+                       YearOptions="@YearOptions"
+                       MonthOptions="@MonthOptions"
+                       OnYearSelectionToggled="OnYearSelectionToggled"
+                       OnMonthSelectionToggled="OnMonthSelectionToggled"
+                       YearButtonClassSelector="@YearButtonClassSelector"
+                       MonthButtonClassSelector="@MonthButtonClassSelector"
+                       MonthLabelSelector="@MonthLabelSelector" />
     </div>
 </section>
 

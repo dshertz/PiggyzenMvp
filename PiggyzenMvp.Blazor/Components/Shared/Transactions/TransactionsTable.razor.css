@@ -1,0 +1,37 @@
+.transactions-table {
+    white-space: nowrap;
+}
+
+.transactions-table th,
+.transactions-table td {
+    vertical-align: middle;
+}
+
+.transactions-table .col-select {
+    width: 44px;
+}
+
+.transactions-table .select-checkbox {
+    display: block;
+    margin: 0 auto;
+}
+
+.transactions-table .col-date {
+    width: 110px;
+}
+
+.transactions-table .col-amount {
+    width: 120px;
+}
+
+.transactions-table .col-category {
+    width: 180px;
+}
+
+.transactions-table .col-balance {
+    width: 120px;
+}
+
+.transactions-table td.text-end {
+    text-align: right;
+}
