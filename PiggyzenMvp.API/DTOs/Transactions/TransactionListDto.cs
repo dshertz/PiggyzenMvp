@@ -9,6 +9,8 @@ public class TransactionListDto
     public decimal Amount { get; set; }
     public decimal? Balance { get; set; }
 
+    public string? Note { get; set; }
+
     // Info om kategori
     public int? CategoryId { get; set; }
     public string? CategoryName { get; set; }

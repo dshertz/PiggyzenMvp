@@ -42,6 +42,7 @@ public class TransactionsController : ControllerBase
                 Description = t.Description,
                 Amount = t.Amount,
                 Balance = t.Balance,
+                Note = t.Note,
 
                 CategoryId = t.CategoryId,
                 CategoryName = t.Category == null
