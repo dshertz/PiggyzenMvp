@@ -14,6 +14,7 @@ public class TransactionListDto
     public string? CategoryName { get; set; }
 
     // Info om huvudkategori (Type)
+    // Ändra till CategoryGroup
     public int? TypeId { get; set; }
     public string? TypeName { get; set; }
 }

@@ -16,5 +16,7 @@ namespace PiggyzenMvp.API.Models
         public required int ImportSequence { get; set; }
         public string? RawRow { get; set; }
         public CategorizationUsage? CategorizationUsage { get; set; }
+        public string? Note { get; set; }
+        public List<TransactionTag> Tags { get; set; } = new();
     }
 }
