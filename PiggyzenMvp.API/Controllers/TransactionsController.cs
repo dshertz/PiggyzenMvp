@@ -315,4 +315,156 @@ public class TransactionsController : ControllerBase
 
         return Ok(new { updated, errors });
     }
+
+    [HttpPatch("metadata")]
+    public async Task<IActionResult> UpdateMetadata(
+        [FromBody] IReadOnlyCollection<TransactionMetadataUpdateDto>? requests,
+        CancellationToken ct
+    )
+    {
+        if (requests == null || requests.Count == 0)
+            return BadRequest(new { Message = "Minst en transaktion måste skickas in." });
+
+        var transactionIds = requests.Select(r => r.TransactionId).ToList();
+        var transactions = await _context.Transactions
+            .Include(t => t.Tags)
+            .Where(t => transactionIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, ct);
+
+        var results = new List<TransactionMetadataUpdateResultDto>();
+        var updated = 0;
+        var hasChanges = false;
+
+        foreach (var request in requests)
+        {
+            if (!transactions.TryGetValue(request.TransactionId, out var transaction))
+            {
+                results.Add(
+                    new TransactionMetadataUpdateResultDto(
+                        request.TransactionId,
+                        false,
+                        "Transaktionen hittades inte."
+                    )
+                );
+
+                continue;
+            }
+
+            var transactionUpdated = false;
+
+            if (request.Note is not null && transaction.Note != request.Note)
+            {
+                transaction.Note = request.Note;
+                transactionUpdated = true;
+            }
+
+            var existingTagValues = new HashSet<string>(
+                transaction.Tags.Select(t => t.Value),
+                TagComparer
+            );
+
+            if (request.TagsSet != null)
+            {
+                var normalizedSet = NormalizeTagValues(request.TagsSet);
+                var normalizedSetHash = new HashSet<string>(normalizedSet, TagComparer);
+
+                if (!existingTagValues.SetEquals(normalizedSetHash))
+                {
+                    _context.TransactionTags.RemoveRange(transaction.Tags);
+                    transaction.Tags.Clear();
+                    existingTagValues.Clear();
+
+                    foreach (var tagValue in normalizedSet)
+                    {
+                        var tag = new TransactionTag
+                        {
+                            TransactionId = transaction.Id,
+                            Value = tagValue,
+                        };
+
+                        transaction.Tags.Add(tag);
+                        existingTagValues.Add(tag.Value);
+                    }
+
+                    transactionUpdated = true;
+                }
+            }
+            else
+            {
+                if (request.TagsAdd != null)
+                {
+                    var toAdd = NormalizeTagValues(request.TagsAdd);
+
+                    foreach (var tagValue in toAdd)
+                    {
+                        if (existingTagValues.Add(tagValue))
+                        {
+                            transaction.Tags.Add(
+                                new TransactionTag
+                                {
+                                    TransactionId = transaction.Id,
+                                    Value = tagValue,
+                                }
+                            );
+                            transactionUpdated = true;
+                        }
+                    }
+                }
+
+                if (request.TagsRemove != null)
+                {
+                    var toRemove = NormalizeTagValues(request.TagsRemove);
+
+                    foreach (var tagValue in toRemove)
+                    {
+                        var tagEntity = transaction.Tags.FirstOrDefault(t =>
+                            TagComparer.Equals(t.Value, tagValue));
+
+                        if (tagEntity != null)
+                        {
+                            _context.TransactionTags.Remove(tagEntity);
+                            transaction.Tags.Remove(tagEntity);
+                            existingTagValues.Remove(tagValue);
+                            transactionUpdated = true;
+                        }
+                    }
+                }
+            }
+
+            if (transactionUpdated)
+            {
+                hasChanges = true;
+                updated++;
+            }
+
+            results.Add(
+                new TransactionMetadataUpdateResultDto(
+                    request.TransactionId,
+                    transactionUpdated,
+                    null
+                )
+            );
+        }
+
+        if (hasChanges)
+            await _context.SaveChangesAsync(ct);
+
+        return Ok(new { updated, results });
+    }
+
+    private static readonly StringComparer TagComparer = StringComparer.OrdinalIgnoreCase;
+
+    // Trims and dedupes incoming tag names before comparison/storage.
+    private static List<string> NormalizeTagValues(IReadOnlyCollection<string>? values)
+    {
+        if (values == null || values.Count == 0)
+            return new List<string>();
+
+        return values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Where(trimmed => trimmed.Length > 0)
+            .Distinct(TagComparer)
+            .ToList();
+    }
 }

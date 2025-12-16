@@ -13,6 +13,7 @@ namespace PiggyzenMvp.API.Data
         public DbSet<Category> Categories { get; set; }
         public DbSet<CategorizationRule> CategorizationRules { get; set; }
         public DbSet<CategorizationUsage> CategorizationUsages { get; set; }
+        public DbSet<TransactionTag> TransactionTags { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -94,6 +95,25 @@ namespace PiggyzenMvp.API.Data
                 .Entity<CategorizationUsage>()
                 .Property(u => u.Amount)
                 .HasColumnType("decimal(18,2)");
+            modelBuilder
+                .Entity<Transaction>()
+                .Property(t => t.Note)
+                .HasMaxLength(2000);
+
+            modelBuilder
+                .Entity<TransactionTag>()
+                .HasKey(t => new { t.TransactionId, t.Value });
+            modelBuilder
+                .Entity<TransactionTag>()
+                .Property(t => t.Value)
+                .IsRequired()
+                .HasMaxLength(128);
+            modelBuilder
+                .Entity<TransactionTag>()
+                .HasOne(t => t.Transaction)
+                .WithMany(t => t.Tags)
+                .HasForeignKey(t => t.TransactionId)
+                .OnDelete(DeleteBehavior.Cascade);
             // Seeds handled outside OnModelCreating to preserve user overrides
         }
     }
