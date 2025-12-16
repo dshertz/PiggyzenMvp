@@ -20,6 +20,11 @@
     width: 110px;
 }
 
+.transactions-table .col-note {
+    max-width: 260px;
+    white-space: normal;
+}
+
 .transactions-table .col-amount {
     width: 120px;
 }

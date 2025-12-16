@@ -8,6 +8,7 @@ namespace PiggyzenMvp.Blazor.DTOs
         public string Description { get; set; } = "";
         public decimal Amount { get; set; }
         public decimal? Balance { get; set; }
+        public string? Note { get; set; }
 
         // Kategori-info
         public int? CategoryId { get; set; }

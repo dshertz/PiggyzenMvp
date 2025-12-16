@@ -16,6 +16,7 @@
             <th class="col-balance text-end">Saldo</th>
             <th>Group</th>
             <th class="col-category">Kategori</th>
+            <th class="col-note">Notering</th>
         </tr>
     </thead>
     <tbody>
@@ -35,6 +36,7 @@
                 <td class="text-end">@(tx.Balance?.ToString("F2") ?? "-")</td>
                 <td>@(tx.TypeName ?? "—")</td>
                 <td>@(tx.CategoryName ?? "Ej vald")</td>
+                <td class="col-note">@(!string.IsNullOrWhiteSpace(tx.Note) ? tx.Note : "—")</td>
             </tr>
         }
     </tbody>
