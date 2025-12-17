@@ -109,7 +109,7 @@ namespace PiggyzenMvp.API.Services
                         NormalizedDescription = normalizedDescription,
                         Amount = amount!.Value,
                         Balance = balance,
-                        ImportId = GenerateImportId(transactionDate.Value, normalizedDescription, amount.Value),
+                        ImportId = string.Empty,
                         SourceLineNumber = lineNumber,
                         RawRow = row,
                     }
@@ -171,9 +171,5 @@ namespace PiggyzenMvp.API.Services
                 : (amount = null) != null;
         }
 
-        private string GenerateImportId(DateTime transactionDate, string normalizedDescription, decimal amount)
-        {
-            return $"{transactionDate:yyyy-MM-dd}|{normalizedDescription}|{amount:F2}";
-        }
     }
 }
