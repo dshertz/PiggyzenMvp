@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PiggyzenMvp.API.Data;
@@ -94,36 +95,76 @@ public class TransactionsController : ControllerBase
             return Ok(response);
         }
 
-        var dtoDates = parsedDtos.Select(dto => dto.TransactionDate.Date).Distinct().ToList();
+        var groupedByFingerprint = parsedDtos
+            .GroupBy(
+                dto => new TransactionFingerprint(
+                    dto.TransactionDate.Date,
+                    dto.NormalizedDescription,
+                    dto.Amount
+                )
+            )
+            .ToList();
 
-        var existingImportIds = await _context.Transactions
-            .Where(t => dtoDates.Contains(t.TransactionDate.Date))
-            .Select(t => t.ImportId)
-            .ToListAsync(ct);
-
-        var existingIdSet = existingImportIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var candidateDates = groupedByFingerprint
+            .Select(group => group.Key.Date)
+            .Distinct()
+            .ToList();
 
         var duplicateWarnings = new List<string>();
         var newDtos = new List<TransactionImportDto>();
 
-        foreach (var dto in parsedDtos)
+        await using var dbTransaction =
+            await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
+        var existingTransactions = await _context.Transactions
+            .Where(t => candidateDates.Contains(t.TransactionDate.Date))
+            .ToListAsync(ct);
+
+        var existingFingerprintCounts = existingTransactions
+            .GroupBy(
+                t => new TransactionFingerprint(
+                    t.TransactionDate.Date,
+                    t.NormalizedDescription,
+                    t.Amount
+                )
+            )
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        foreach (var group in groupedByFingerprint)
         {
-            if (existingIdSet.Contains(dto.ImportId))
+            var fingerprint = group.Key;
+            var alreadyImported =
+                existingFingerprintCounts.TryGetValue(fingerprint, out var count) ? count : 0;
+
+            if (alreadyImported > 0)
             {
+                var sample = group.First();
                 duplicateWarnings.Add(
-                    $"Rad {dto.SourceLineNumber}: transaktionen finns redan – \"{dto.Description}\" {dto.TransactionDate:yyyy-MM-dd}"
+                    $"Rad {sample.SourceLineNumber}: transaktionstypen \"{sample.Description}\" finns redan för {fingerprint.Date:yyyy-MM-dd} och {fingerprint.Amount:F2}, hela gruppen blockeras."
                 );
                 continue;
             }
 
-            newDtos.Add(dto);
+            var ordinalBase = alreadyImported;
+            var index = 0;
+
+            foreach (var dto in group)
+            {
+                var ordinal = ordinalBase + index + 1;
+                dto.ImportId = BuildImportId(dto, ordinal);
+                newDtos.Add(dto);
+                index++;
+            }
+
+            existingFingerprintCounts[fingerprint] = ordinalBase + index;
         }
 
         response.DuplicateWarnings = duplicateWarnings;
 
         if (!newDtos.Any())
         {
-            response.DuplicateWarnings.Add("No new transactions were imported.");
+            response.DuplicateWarnings.Add("Ingen ny transaktion importerades.");
+            await dbTransaction.CommitAsync(ct);
             return Ok(response);
         }
 
@@ -156,6 +197,7 @@ public class TransactionsController : ControllerBase
         {
             await _context.Transactions.AddRangeAsync(newTransactions, ct);
             await _context.SaveChangesAsync(ct);
+            await dbTransaction.CommitAsync(ct);
 
             var newIds = newTransactions.Select(t => t.Id).ToList();
             var autoCategorizeResults = await _categorizationService.AutoCategorizeBatchAsync(
@@ -468,4 +510,15 @@ public class TransactionsController : ControllerBase
             .Distinct(TagComparer)
             .ToList();
     }
+
+    private static string BuildImportId(TransactionImportDto dto, int ordinal)
+    {
+        return $"{dto.TransactionDate:yyyy-MM-dd}|{dto.NormalizedDescription}|{dto.Amount:F2}|{ordinal}";
+    }
+
+    private readonly record struct TransactionFingerprint(
+        DateTime Date,
+        string NormalizedDescription,
+        decimal Amount
+    );
 }
