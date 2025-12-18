@@ -16,16 +16,19 @@ public class TransactionsController : ControllerBase
     private readonly PiggyzenMvpContext _context;
     private readonly TransactionImportService _importService;
     private readonly CategorizationService _categorizationService;
+    private readonly TransactionKindMapper _kindMapper;
 
     public TransactionsController(
         PiggyzenMvpContext context,
         TransactionImportService importService,
-        CategorizationService categorizationService
+        CategorizationService categorizationService,
+        TransactionKindMapper kindMapper
     )
     {
         _context = context;
         _importService = importService;
         _categorizationService = categorizationService;
+        _kindMapper = kindMapper;
     }
 
     [HttpGet]
@@ -174,6 +177,13 @@ public class TransactionsController : ControllerBase
 
         foreach (var dto in newDtos)
         {
+            var kind = _kindMapper.Map(
+                dto.TypeRaw,
+                dto.NormalizedDescription,
+                dto.Description,
+                dto.ImportId
+            );
+
             newTransactions.Add(
                 new Transaction
                 {
@@ -183,6 +193,8 @@ public class TransactionsController : ControllerBase
                     NormalizedDescription = dto.NormalizedDescription,
                     Amount = dto.Amount,
                     Balance = dto.Balance,
+                    TypeRaw = dto.TypeRaw,
+                    Kind = kind,
                     ImportId = dto.ImportId,
                     ImportedAtUtc = importedAt,
                     ImportSequence = sequence++,

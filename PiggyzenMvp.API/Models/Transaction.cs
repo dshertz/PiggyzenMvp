@@ -9,6 +9,8 @@ namespace PiggyzenMvp.API.Models
         public required string NormalizedDescription { get; set; }
         public required decimal Amount { get; set; }
         public decimal? Balance { get; set; }
+        public string? TypeRaw { get; set; }
+        public TransactionKind Kind { get; set; } = TransactionKind.Unknown;
         public int? CategoryId { get; set; }
         public Category? Category { get; set; }
         public required string ImportId { get; set; }
