@@ -17,26 +17,29 @@ public class TransactionsController : ControllerBase
     private readonly TransactionImportService _importService;
     private readonly CategorizationService _categorizationService;
     private readonly TransactionKindMapper _kindMapper;
+    private readonly DescriptionSignatureService _descriptionSignatureService;
 
     public TransactionsController(
         PiggyzenMvpContext context,
         TransactionImportService importService,
         CategorizationService categorizationService,
-        TransactionKindMapper kindMapper
+        TransactionKindMapper kindMapper,
+        DescriptionSignatureService descriptionSignatureService
     )
     {
         _context = context;
         _importService = importService;
         _categorizationService = categorizationService;
         _kindMapper = kindMapper;
+        _descriptionSignatureService = descriptionSignatureService;
     }
 
     [HttpGet]
     public async Task<ActionResult<List<TransactionListDto>>> GetAll(CancellationToken ct)
     {
-        var items = await _context
-            .Transactions.Include(t => t.Category)
-            .ThenInclude(c => c.Group)
+            var items = await _context
+                .Transactions.Include(t => t.Category)
+                .ThenInclude(c => c!.Group)
             .OrderByDescending(t => t.TransactionDate)
             .Select(t => new TransactionListDto
             {
@@ -184,6 +187,14 @@ public class TransactionsController : ControllerBase
                 dto.ImportId
             );
 
+            var signature = await _descriptionSignatureService.GetOrCreateAsync(
+                dto.NormalizedDescription,
+                kind,
+                dto.Amount,
+                dto.Description,
+                ct
+            );
+
             newTransactions.Add(
                 new Transaction
                 {
@@ -199,6 +210,7 @@ public class TransactionsController : ControllerBase
                     ImportedAtUtc = importedAt,
                     ImportSequence = sequence++,
                     RawRow = dto.RawRow,
+                    DescriptionSignature = signature,
                 }
             );
         }
@@ -213,7 +225,8 @@ public class TransactionsController : ControllerBase
 
             var newIds = newTransactions.Select(t => t.Id).ToList();
             var autoCategorizeResults = await _categorizationService.AutoCategorizeBatchAsync(
-                newIds
+                newIds,
+                ct
             );
             autoResults = autoCategorizeResults.ToList();
         }

@@ -13,6 +13,8 @@ namespace PiggyzenMvp.API.Models
         public TransactionKind Kind { get; set; } = TransactionKind.Unknown;
         public int? CategoryId { get; set; }
         public Category? Category { get; set; }
+        public int? DescriptionSignatureId { get; set; }
+        public DescriptionSignature? DescriptionSignature { get; set; }
         public required string ImportId { get; set; }
         public required DateTime ImportedAtUtc { get; set; }
         public required int ImportSequence { get; set; }

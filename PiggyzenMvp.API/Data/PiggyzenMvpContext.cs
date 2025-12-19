@@ -14,6 +14,7 @@ namespace PiggyzenMvp.API.Data
         public DbSet<CategorizationRule> CategorizationRules { get; set; }
         public DbSet<CategorizationUsage> CategorizationUsages { get; set; }
         public DbSet<TransactionTag> TransactionTags { get; set; }
+        public DbSet<DescriptionSignature> DescriptionSignatures { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -105,6 +106,41 @@ namespace PiggyzenMvp.API.Data
                 .Entity<Transaction>()
                 .Property(t => t.Kind)
                 .HasDefaultValue(TransactionKind.Unknown);
+
+            modelBuilder
+                .Entity<Transaction>()
+                .HasOne(t => t.DescriptionSignature)
+                .WithMany(s => s.Transactions)
+                .HasForeignKey(t => t.DescriptionSignatureId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder
+                .Entity<DescriptionSignature>()
+                .Property(s => s.NormalizedDescription)
+                .HasMaxLength(512);
+            modelBuilder
+                .Entity<DescriptionSignature>()
+                .Property(s => s.AlgorithmVersion)
+                .HasMaxLength(64);
+            modelBuilder
+                .Entity<DescriptionSignature>()
+                .Property(s => s.MerchantCandidate)
+                .HasMaxLength(256);
+            modelBuilder
+                .Entity<DescriptionSignature>()
+                .Property(s => s.Note)
+                .HasMaxLength(2000);
+            modelBuilder
+                .Entity<DescriptionSignature>()
+                .Property(s => s.MachineConfidence)
+                .HasColumnType("decimal(5,3)");
+            modelBuilder
+                .Entity<DescriptionSignature>()
+                .HasIndex(s => s.NormalizedDescription);
+            modelBuilder
+                .Entity<DescriptionSignature>()
+                .HasIndex(s => new { s.NormalizedDescription, s.Kind, s.IsPositive })
+                .IsUnique();
 
             modelBuilder
                 .Entity<Transaction>()
