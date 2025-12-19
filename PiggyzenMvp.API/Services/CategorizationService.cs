@@ -20,11 +20,17 @@ namespace PiggyzenMvp.API.Services
     {
         private readonly PiggyzenMvpContext _context;
         private readonly NormalizeService _normalize;
+        private readonly DescriptionSignatureService _signatureService;
 
-        public CategorizationService(PiggyzenMvpContext context, NormalizeService normalize)
+        public CategorizationService(
+            PiggyzenMvpContext context,
+            NormalizeService normalize,
+            DescriptionSignatureService signatureService
+        )
         {
             _context = context;
             _normalize = normalize;
+            _signatureService = signatureService;
         }
 
         /// <summary>
@@ -40,7 +46,7 @@ namespace PiggyzenMvp.API.Services
         {
             var t = await _context
                 .Transactions.Include(x => x.CategorizationUsage)
-                .ThenInclude(u => u.CategorizationRule)
+                .ThenInclude(u => u!.CategorizationRule)
                 .FirstOrDefaultAsync(x => x.Id == transactionId, ct);
 
             if (t == null)
@@ -138,7 +144,8 @@ namespace PiggyzenMvp.API.Services
         {
             var tx = await _context
                 .Transactions.Include(t => t.CategorizationUsage)
-                .ThenInclude(u => u.CategorizationRule)
+                .ThenInclude(u => u!.CategorizationRule)
+                .Include(t => t.DescriptionSignature)
                 .FirstOrDefaultAsync(t => t.Id == transactionId, ct);
 
             if (tx == null)
@@ -170,6 +177,11 @@ namespace PiggyzenMvp.API.Services
 
             var normalized = tx.NormalizedDescription;
             var isPositive = tx.Amount >= 0m;
+
+            if (!_signatureService.IsEligibleForAutoCategorization(tx.DescriptionSignature))
+            {
+                return "Beskrivningen är inte kvalificerad för automatisk kategorisering.";
+            }
 
             var candidateRules = await _context
                 .CategorizationRules.Where(r =>
@@ -291,7 +303,8 @@ namespace PiggyzenMvp.API.Services
         {
             var tx = await _context
                 .Transactions.Include(t => t.CategorizationUsage)
-                .ThenInclude(u => u.CategorizationRule)
+                .ThenInclude(u => u!.CategorizationRule)
+                .Include(t => t.DescriptionSignature)
                 .FirstOrDefaultAsync(t => t.Id == transactionId, ct);
 
             if (tx == null)
@@ -374,6 +387,7 @@ namespace PiggyzenMvp.API.Services
 
             var similarTransactions = await _context
                 .Transactions.Include(t => t.CategorizationUsage)
+                .Include(t => t.DescriptionSignature)
                 .Where(t =>
                     t.CategoryId == null
                     && t.NormalizedDescription == normalized
@@ -391,6 +405,9 @@ namespace PiggyzenMvp.API.Services
             foreach (var tx in similarTransactions)
             {
                 if (tx.CategorizationUsage != null)
+                    continue;
+
+                if (!_signatureService.IsEligibleForAutoCategorization(tx.DescriptionSignature))
                     continue;
 
                 var usage = new CategorizationUsage
