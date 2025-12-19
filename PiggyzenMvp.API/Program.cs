@@ -14,6 +14,7 @@ builder.Services.AddScoped<TransactionImportService>();
 builder.Services.AddScoped<CategorizationService>();
 builder.Services.AddScoped<CategorySlugService>();
 builder.Services.AddScoped<CategorySeeder>();
+builder.Services.AddSingleton<TransactionKindMapper>();
 builder.Services.AddDbContext<PiggyzenMvpContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Sqlite"))
 );

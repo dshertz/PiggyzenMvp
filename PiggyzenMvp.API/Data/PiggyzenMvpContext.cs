@@ -92,9 +92,20 @@ namespace PiggyzenMvp.API.Data
             //     .Property(h => h.MaxAmount)
             //     .HasColumnType("decimal(18,2)");
             modelBuilder
-                .Entity<CategorizationUsage>()
-                .Property(u => u.Amount)
-                .HasColumnType("decimal(18,2)");
+            .Entity<CategorizationUsage>()
+            .Property(u => u.Amount)
+            .HasColumnType("decimal(18,2)");
+
+            modelBuilder
+                .Entity<Transaction>()
+                .Property(t => t.TypeRaw)
+                .HasMaxLength(256);
+
+            modelBuilder
+                .Entity<Transaction>()
+                .Property(t => t.Kind)
+                .HasDefaultValue(TransactionKind.Unknown);
+
             modelBuilder
                 .Entity<Transaction>()
                 .Property(t => t.Note)

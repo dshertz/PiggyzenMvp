@@ -2,6 +2,8 @@ namespace PiggyzenMvp.API.DTOs;
 
 public class TransactionImportDto
 {
+    public string? TypeRaw { get; set; }
+
     public DateTime? BookingDate { get; set; }
     public required DateTime TransactionDate { get; set; }
     public required string Description { get; set; }
