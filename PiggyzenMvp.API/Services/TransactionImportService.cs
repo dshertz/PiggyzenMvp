@@ -77,37 +77,124 @@ public class TransactionImportService
         _normalizeService = normalizeService;
     }
 
+    public TransactionImportPreviewResult PreparePreview(string rawText, int previewRowCount = 5)
+    {
+        var preview = new TransactionImportPreviewResult();
+
+        if (!TryCreateProcessingContext(rawText, out var context, out var errors))
+        {
+            preview.ParsingErrors.AddRange(errors);
+            return preview;
+        }
+
+        var safeContext = context!;
+
+        var rows = safeContext.ValidRows
+            .Take(previewRowCount)
+            .Select(row => new TransactionImportPreviewRow
+            {
+                LineNumber = row.LineNumber,
+                RawRow = row.RawRow,
+                Columns = row.Columns.ToArray(),
+            })
+            .ToList();
+
+        preview = new TransactionImportPreviewResult
+        {
+            Separator = safeContext.Separator,
+            ColumnCount = safeContext.ColumnCount,
+            Rows = rows,
+            IgnoredRows = safeContext.IgnoredRows
+                .Select(row => new TransactionImportIgnoredRow
+                {
+                    LineNumber = row.LineNumber,
+                    RawRow = row.RawRow,
+                    ColumnCount = row.Columns.Length,
+                })
+                .ToList(),
+        };
+
+        return preview;
+    }
+
+    public TransactionImportParseResult ParseWithSchema(
+        string rawText,
+        TransactionImportSchemaDefinition schema
+    )
+    {
+        var result = new TransactionImportParseResult();
+
+        if (schema == null)
+        {
+            result.ParsingErrors.Add("Schema saknas.");
+            return result;
+        }
+
+        if (!TryCreateProcessingContext(rawText, out var context, out var errors))
+        {
+            result.ParsingErrors.AddRange(errors);
+            return result;
+        }
+
+        var safeContext = context!;
+
+        if (schema.ColumnCount != safeContext.ColumnCount)
+        {
+            result.ParsingErrors.Add("Schema innehåller inte samma antal kolumner som importen.");
+            return result;
+        }
+
+        if (!schema.TryValidate(safeContext.ColumnCount, out var schemaErrors))
+        {
+            result.ParsingErrors.AddRange(schemaErrors);
+            return result;
+        }
+
+        var manualSchema = new TransactionImportSchema(
+            schema.TransactionDateIndex,
+            schema.DescriptionIndex,
+            schema.AmountIndex,
+            schema.BookingDateIndex,
+            schema.TransactionKindIndex,
+            schema.BalanceIndex,
+            safeContext.ColumnCount
+        );
+
+        ParseRows(safeContext.ValidRows, manualSchema, result);
+
+        if (!result.Transactions.Any() && !result.ParsingErrors.Any())
+        {
+            result.ParsingErrors.Add("Inga giltiga rader hittades.");
+        }
+
+        return result;
+    }
+
     public TransactionImportParseResult ParseRawInput(string rawText)
     {
         var result = new TransactionImportParseResult();
 
-        if (string.IsNullOrWhiteSpace(rawText))
+        if (!TryCreateProcessingContext(rawText, out var context, out var errors))
         {
-            result.ParsingErrors.Add("Ingen text skickades in för import.");
+            result.ParsingErrors.AddRange(errors);
             return result;
         }
 
-        var normalized = NormalizeLineEndings(rawText);
-        var inputRows = SplitIntoRows(normalized);
+        var safeContext = context!;
 
-        if (!inputRows.Any())
-        {
-            result.ParsingErrors.Add("Ingen användbar text hittades.");
-            return result;
-        }
-
-        if (!TryDetectSeparator(inputRows, out var parsedRows, out var expectedColumnCount))
-        {
-            result.ParsingErrors.Add("Kunde inte avgöra separatorn för importen.");
-            return result;
-        }
-
-        if (!TryBuildSchema(parsedRows, expectedColumnCount, out var schema, out var dataRows, out var schemaError))
+        if (
+            !TryBuildSchema(
+                safeContext.ValidRows,
+                safeContext.ColumnCount,
+                out var schema,
+                out var dataRows,
+                out var schemaError
+            )
+        )
         {
             result.ParsingErrors.Add(schemaError ?? "Kunde inte avgöra kolumnerna.");
             return result;
         }
-
         ParseRows(dataRows, schema, result);
 
         if (!result.Transactions.Any() && !result.ParsingErrors.Any())
@@ -133,27 +220,84 @@ public class TransactionImportService
             .ToList();
     }
 
+    private bool TryCreateProcessingContext(
+        string rawText,
+        out TransactionImportProcessingContext? context,
+        out List<string> errors
+    )
+    {
+        context = null;
+        errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(rawText))
+        {
+            errors.Add("Ingen text skickades in för import.");
+            return false;
+        }
+
+        var normalized = NormalizeLineEndings(rawText);
+        var inputRows = SplitIntoRows(normalized);
+
+        if (!inputRows.Any())
+        {
+            errors.Add("Ingen användbar text hittades.");
+            return false;
+        }
+
+        if (!TryDetectSeparator(inputRows, out var separator, out var expectedColumnCount, out var parsedRows))
+        {
+            errors.Add("Kunde inte avgöra separatorn för importen.");
+            return false;
+        }
+
+        var validRows = parsedRows
+            .Where(row => row.Columns.Length == expectedColumnCount)
+            .ToList();
+
+        var ignoredRows = parsedRows
+            .Where(row => row.Columns.Length != expectedColumnCount)
+            .ToList();
+
+        foreach (var row in validRows)
+        {
+            CleanRowCells(row);
+        }
+
+        context = new TransactionImportProcessingContext(
+            separator,
+            expectedColumnCount,
+            validRows,
+            ignoredRows
+        );
+
+        return true;
+    }
+
     private static bool TryDetectSeparator(
         List<InputRow> rows,
-        out List<RowData> parsedRows,
-        out int expectedColumnCount
+        out char separator,
+        out int expectedColumnCount,
+        out List<RowData> parsedRows
     )
     {
         parsedRows = new List<RowData>();
         expectedColumnCount = 0;
+        separator = default;
         var bestScore = -1;
         var bestColumnCount = 0;
         var bestSeparatorRows = new List<RowData>();
+        var bestSeparator = default(char);
 
-        foreach (var separator in CandidateSeparators)
+        foreach (var candidate in CandidateSeparators)
         {
             var splits = rows
-                .Select(row =>
-                    new RowData(
-                        row.LineNumber,
-                        row.Text,
-                        row.Text.Split(separator).Select(cell => cell.Trim()).ToArray()
-                    )
+                .Select(
+                    row =>
+                        new RowData(
+                            row.LineNumber,
+                            row.Text,
+                            row.Text.Split(candidate).Select(cell => cell.Trim()).ToArray()
+                        )
                 )
                 .ToList();
 
@@ -180,6 +324,7 @@ public class TransactionImportService
                 bestScore = score;
                 bestColumnCount = modeGroup.Key;
                 bestSeparatorRows = splits;
+                bestSeparator = candidate;
             }
         }
 
@@ -188,8 +333,9 @@ public class TransactionImportService
             return false;
         }
 
-        parsedRows = bestSeparatorRows;
+        separator = bestSeparator;
         expectedColumnCount = bestColumnCount;
+        parsedRows = bestSeparatorRows;
         return true;
     }
 
@@ -556,6 +702,31 @@ public class TransactionImportService
         }
     }
 
+    private static void CleanRowCells(RowData row)
+    {
+        for (var i = 0; i < row.Columns.Length; i++)
+        {
+            row.Columns[i] = CleanCell(row.Columns[i]);
+        }
+    }
+
+    private static string CleanCell(string? cell)
+    {
+        if (string.IsNullOrWhiteSpace(cell))
+        {
+            return string.Empty;
+        }
+
+        var cleaned = cell.Trim();
+
+        while (cleaned.Length >= 2 && cleaned[0] == '"' && cleaned[^1] == '"')
+        {
+            cleaned = cleaned.Substring(1, cleaned.Length - 2).Trim();
+        }
+
+        return cleaned;
+    }
+
     private static string NormalizeForSchemaValue(string? input)
     {
         if (string.IsNullOrWhiteSpace(input))
@@ -641,6 +812,13 @@ public class TransactionImportService
         int? TypeIdx,
         int? BalanceIdx,
         int ColumnCount
+    );
+
+    private sealed record TransactionImportProcessingContext(
+        char Separator,
+        int ColumnCount,
+        List<RowData> ValidRows,
+        List<RowData> IgnoredRows
     );
 
     private sealed class ColumnMetrics
