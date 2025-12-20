@@ -89,6 +89,56 @@ public class TransactionsController : ControllerBase
         }
 
         var parseResult = _importService.ParseRawInput(rawText);
+        return Ok(await ImportParsedTransactionsAsync(parseResult, ct));
+    }
+
+    [HttpPost("import/preview")]
+    [Consumes("text/plain")]
+    public ActionResult<TransactionImportPreviewResult> PreviewImport([FromBody] string rawText)
+    {
+        if (string.IsNullOrWhiteSpace(rawText))
+        {
+            return BadRequest(
+                new ProblemDetails
+                {
+                    Title = "Importtext saknas",
+                    Detail = "Ingen text skickades i förfrågan.",
+                    Status = StatusCodes.Status400BadRequest,
+                }
+            );
+        }
+
+        var preview = _importService.PreparePreview(rawText);
+        return Ok(preview);
+    }
+
+    [HttpPost("import/schema")]
+    public async Task<ActionResult<ImportResult>> ImportWithSchema(
+        [FromBody] TransactionImportWithSchemaRequest? request,
+        CancellationToken ct
+    )
+    {
+        if (request == null || request.Schema == null || string.IsNullOrWhiteSpace(request.RawText))
+        {
+            return BadRequest(
+                new ProblemDetails
+                {
+                    Title = "Schema eller text saknas",
+                    Detail = "Både texten och ett schema måste skickas.",
+                    Status = StatusCodes.Status400BadRequest,
+                }
+            );
+        }
+
+        var parseResult = _importService.ParseWithSchema(request.RawText, request.Schema);
+        return Ok(await ImportParsedTransactionsAsync(parseResult, ct));
+    }
+
+    private async Task<ImportResult> ImportParsedTransactionsAsync(
+        TransactionImportParseResult parseResult,
+        CancellationToken ct
+    )
+    {
         var response = new ImportResult
         {
             ParsingErrors = parseResult.ParsingErrors.ToList(),
@@ -98,7 +148,7 @@ public class TransactionsController : ControllerBase
 
         if (!parsedDtos.Any())
         {
-            return Ok(response);
+            return response;
         }
 
         var groupedByFingerprint = parsedDtos
@@ -171,7 +221,7 @@ public class TransactionsController : ControllerBase
         {
             response.DuplicateWarnings.Add("Ingen ny transaktion importerades.");
             await dbTransaction.CommitAsync(ct);
-            return Ok(response);
+            return response;
         }
 
         var importedAt = DateTime.UtcNow;
@@ -247,7 +297,7 @@ public class TransactionsController : ControllerBase
         response.AutoCategorizeErrors = autoCategorizeErrors;
         response.ImportedAtUtc = importedAt;
 
-        return Ok(response);
+        return response;
     }
 
     [HttpGet("{id}/similar-uncategorized")]
