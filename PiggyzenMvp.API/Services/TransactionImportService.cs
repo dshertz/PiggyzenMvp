@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -70,6 +71,27 @@ public class TransactionImportService
         "rabatt",
     };
 
+    private static readonly string[] HeaderIndicatorTokens =
+    {
+        "kontonummer",
+        "kontonamn",
+        "konto",
+        "saldo",
+        "tillgangligt",
+        "tillgangligtbelopp",
+        "bokforingsdatum",
+        "transaktionsdatum",
+        "transaktionstyp",
+        "transaktionstypen",
+        "meddelande",
+        "belopp",
+        "mottagare",
+    };
+
+    private const int MaxLayoutSampleRows = 200;
+    private const int MaxSchemaSampleRows = 50;
+    private const int MinLayoutColumnCount = 3;
+
     private readonly NormalizeService _normalizeService;
 
     public TransactionImportService(NormalizeService normalizeService)
@@ -88,30 +110,67 @@ public class TransactionImportService
         }
 
         var safeContext = context!;
+        var ignoredRows = BuildIgnoredRows(safeContext.IgnoredRows);
 
-        var rows = safeContext.ValidRows
-            .Take(previewRowCount)
-            .Select(row => new TransactionImportPreviewRow
+        if (
+            !TryBuildSchema(
+                safeContext.ValidRows,
+                safeContext.ColumnCount,
+                out var schema,
+                out var dataRows,
+                out var schemaConfidence,
+                out var headerDetected,
+                out var headerRow,
+                out var schemaError
+            )
+        )
+        {
+            var fallbackColumns = BuildColumnHints(null, headerRow, safeContext.ColumnCount);
+            preview = new TransactionImportPreviewResult
             {
-                LineNumber = row.LineNumber,
-                RawRow = row.RawRow,
-                Columns = row.Columns.ToArray(),
-            })
-            .ToList();
+                Separator = safeContext.Separator,
+                ColumnCount = safeContext.ColumnCount,
+                LayoutConfidence = safeContext.LayoutConfidence,
+                Rows = BuildPreviewRows(safeContext.ValidRows, previewRowCount, headerRow),
+                IgnoredRows = ignoredRows,
+                Columns = fallbackColumns,
+                HeaderRow = headerDetected && headerRow != null
+                    ? new TransactionImportPreviewHeader
+                    {
+                        LineNumber = headerRow.LineNumber,
+                        Columns = headerRow.Columns.ToArray(),
+                    }
+                    : null,
+            };
+
+            preview.ParsingErrors.Add(schemaError ?? "Kunde inte avgöra kolumnerna.");
+            return preview;
+        }
+
+        var columnHints = BuildColumnHints(
+            schema,
+            headerDetected && headerRow != null ? headerRow : null,
+            safeContext.ColumnCount
+        );
+        var previewRows = BuildPreviewRows(dataRows, previewRowCount, headerRow);
 
         preview = new TransactionImportPreviewResult
         {
             Separator = safeContext.Separator,
             ColumnCount = safeContext.ColumnCount,
-            Rows = rows,
-            IgnoredRows = safeContext.IgnoredRows
-                .Select(row => new TransactionImportIgnoredRow
+            LayoutConfidence = safeContext.LayoutConfidence,
+            SchemaConfidence = schemaConfidence,
+            SuggestedSchema = BuildSchemaDefinition(schema),
+            HeaderRow = headerDetected && headerRow != null
+                ? new TransactionImportPreviewHeader
                 {
-                    LineNumber = row.LineNumber,
-                    RawRow = row.RawRow,
-                    ColumnCount = row.Columns.Length,
-                })
-                .ToList(),
+                    LineNumber = headerRow.LineNumber,
+                    Columns = headerRow.Columns.ToArray(),
+                }
+                : null,
+            Rows = previewRows,
+            IgnoredRows = ignoredRows,
+            Columns = columnHints,
         };
 
         return preview;
@@ -188,6 +247,9 @@ public class TransactionImportService
                 safeContext.ColumnCount,
                 out var schema,
                 out var dataRows,
+                out var schemaConfidence,
+                out var headerDetected,
+                out var headerRow,
                 out var schemaError
             )
         )
@@ -244,19 +306,13 @@ public class TransactionImportService
             return false;
         }
 
-        if (!TryDetectSeparator(inputRows, out var separator, out var expectedColumnCount, out var parsedRows))
+        if (!TryDetectLayout(inputRows, out var layout, out var detectionError))
         {
-            errors.Add("Kunde inte avgöra separatorn för importen.");
+            errors.Add(detectionError ?? "Kunde inte avgöra separatorn för importen.");
             return false;
         }
 
-        var validRows = parsedRows
-            .Where(row => row.Columns.Length == expectedColumnCount)
-            .ToList();
-
-        var ignoredRows = parsedRows
-            .Where(row => row.Columns.Length != expectedColumnCount)
-            .ToList();
+        FilterRows(layout.ParsedRows, layout.ColumnCount, out var validRows, out var ignoredRows);
 
         foreach (var row in validRows)
         {
@@ -264,8 +320,9 @@ public class TransactionImportService
         }
 
         context = new TransactionImportProcessingContext(
-            separator,
-            expectedColumnCount,
+            layout.Separator,
+            layout.ColumnCount,
+            layout.Confidence,
             validRows,
             ignoredRows
         );
@@ -273,32 +330,34 @@ public class TransactionImportService
         return true;
     }
 
-    private static bool TryDetectSeparator(
+    private static bool TryDetectLayout(
         List<InputRow> rows,
-        out char separator,
-        out int expectedColumnCount,
-        out List<RowData> parsedRows
+        out LayoutDetectionResult result,
+        out string? error
     )
     {
-        parsedRows = new List<RowData>();
-        expectedColumnCount = 0;
-        separator = default;
-        var bestScore = -1;
-        var bestColumnCount = 0;
-        var bestSeparatorRows = new List<RowData>();
-        var bestSeparator = default(char);
+        result = default!;
+        error = null;
+
+        if (!rows.Any())
+        {
+            error = "Ingen rad hittades att tolka.";
+            return false;
+        }
+
+        var sampleRows = rows.Take(MaxLayoutSampleRows).ToList();
+        if (!sampleRows.Any())
+        {
+            error = "Ingen användbar text hittades.";
+            return false;
+        }
+
+        LayoutCandidate? bestCandidate = null;
 
         foreach (var candidate in CandidateSeparators)
         {
-            var splits = rows
-                .Select(
-                    row =>
-                        new RowData(
-                            row.LineNumber,
-                            row.Text,
-                            row.Text.Split(candidate).Select(cell => cell.Trim()).ToArray()
-                        )
-                )
+            var splits = sampleRows
+                .Select(row => new RowData(row.LineNumber, row.Text, SplitRow(row.Text, candidate)))
                 .ToList();
 
             var columnGroups = splits
@@ -312,60 +371,129 @@ public class TransactionImportService
             }
 
             var modeGroup = columnGroups.First();
-            if (modeGroup.Key < 3)
+            if (modeGroup.Key < MinLayoutColumnCount)
             {
                 continue;
             }
 
             var score = modeGroup.Count();
 
-            if (score > bestScore || (score == bestScore && modeGroup.Key > bestColumnCount))
+            if (
+                bestCandidate == null
+                || score > bestCandidate.Score
+                || (score == bestCandidate.Score && modeGroup.Key > bestCandidate.ColumnCount)
+            )
             {
-                bestScore = score;
-                bestColumnCount = modeGroup.Key;
-                bestSeparatorRows = splits;
-                bestSeparator = candidate;
+                bestCandidate = new LayoutCandidate(candidate, modeGroup.Key, score);
             }
         }
 
-        if (bestScore <= 0 || bestSeparatorRows.Count == 0)
+        if (bestCandidate == null)
         {
+            error = "Kunde inte avgöra separatorn för importen.";
             return false;
         }
 
-        separator = bestSeparator;
-        expectedColumnCount = bestColumnCount;
-        parsedRows = bestSeparatorRows;
+        var parsedRows = rows
+            .Select(row => new RowData(row.LineNumber, row.Text, SplitRow(row.Text, bestCandidate.Separator)))
+            .ToList();
+
+        var sampleCount = sampleRows.Count;
+        var confidence = sampleCount > 0
+            ? Math.Min(1m, bestCandidate.Score / (decimal)sampleCount)
+            : 0m;
+
+        result = new LayoutDetectionResult(
+            bestCandidate.Separator,
+            bestCandidate.ColumnCount,
+            confidence,
+            parsedRows
+        );
+
         return true;
     }
 
-    private static bool TryBuildSchema(
+    private static void FilterRows(
         List<RowData> parsedRows,
+        int expectedColumnCount,
+        out List<RowData> validRows,
+        out List<RowData> ignoredRows
+    )
+    {
+        validRows = new List<RowData>();
+        ignoredRows = new List<RowData>();
+
+        foreach (var row in parsedRows)
+        {
+            if (row.Columns.Length == expectedColumnCount)
+            {
+                validRows.Add(row);
+            }
+            else
+            {
+                ignoredRows.Add(row);
+            }
+        }
+    }
+
+    private static string[] SplitRow(string text, char separator) => text.Split(separator);
+
+    private static bool TryBuildSchema(
+        List<RowData> validRows,
         int expectedColumnCount,
         out TransactionImportSchema schema,
         out List<RowData> dataRows,
+        out decimal schemaConfidence,
+        out bool headerDetected,
+        out RowData? headerRow,
         out string? error
     )
     {
         schema = default!;
         dataRows = new List<RowData>();
+        schemaConfidence = 0m;
+        headerDetected = false;
+        headerRow = null;
         error = null;
 
-        if (!parsedRows.Any())
+        if (!validRows.Any())
         {
             error = "Ingen rad hittades att tolka.";
             return false;
         }
 
-        if (TryBuildSchemaFromHeader(parsedRows[0], expectedColumnCount, out schema))
+        var rowsForInference = validRows;
+
+        if (
+            TryDetectHeaderSchema(validRows, expectedColumnCount, out schema, out var headerIndex, out var detectedHeader)
+        )
         {
-            dataRows = parsedRows.Skip(1).ToList();
+            headerDetected = true;
+            headerRow = detectedHeader;
+            dataRows = validRows.Skip(headerIndex + 1).ToList();
+            schemaConfidence = 1m;
             return true;
         }
 
-        if (TryInferSchema(parsedRows, expectedColumnCount, out schema, out var inferenceError))
+        var headerLikeIndex = FindHeaderLikeRowIndex(validRows);
+        if (headerLikeIndex.HasValue)
         {
-            dataRows = parsedRows;
+            headerRow = validRows[headerLikeIndex.Value];
+            rowsForInference = validRows.Skip(headerLikeIndex.Value + 1).ToList();
+        }
+
+        if (
+            TryInferSchema(
+                rowsForInference,
+                expectedColumnCount,
+                out schema,
+                out var confidence,
+                out var inferenceError
+            )
+        )
+        {
+            schemaConfidence = confidence;
+            dataRows = rowsForInference;
             return true;
         }
 
@@ -446,13 +574,15 @@ public class TransactionImportService
     }
 
     private static bool TryInferSchema(
-        List<RowData> parsedRows,
+        List<RowData> validRows,
         int expectedColumnCount,
         out TransactionImportSchema schema,
+        out decimal confidence,
         out string error
     )
     {
         schema = default!;
+        confidence = 0m;
         error = string.Empty;
 
         if (expectedColumnCount <= 0)
@@ -461,7 +591,7 @@ public class TransactionImportService
             return false;
         }
 
-        var sampleRows = parsedRows.Take(20).ToList();
+        var sampleRows = validRows.Take(MaxSchemaSampleRows).ToList();
         if (!sampleRows.Any())
         {
             error = "Det finns inga rader att analysera.";
@@ -516,11 +646,11 @@ public class TransactionImportService
 
         var dateCandidate = metrics
             .Select((metric, index) => new { metric.DateMatches, index })
-            .Where(x => x.DateMatches > 0)
+            .Where(x => x.DateMatches >= minDateMatches)
             .OrderByDescending(x => x.DateMatches)
             .FirstOrDefault();
 
-        if (dateCandidate == null || dateCandidate.DateMatches < minDateMatches)
+        if (dateCandidate == null)
         {
             error = "Kunde inte avgöra vilken kolumn som innehåller transaktionsdatum.";
             return false;
@@ -548,19 +678,24 @@ public class TransactionImportService
 
         var amountIdx = moneyCandidates.First().index;
         int? balanceIdx = moneyCandidates
-            .FirstOrDefault(c => c.index != amountIdx)?.index;
+            .Where(c => c.index != amountIdx)
+            .OrderBy(c => c.NegativeMoneyCount)
+            .ThenByDescending(c => c.MoneyMatches)
+            .Select(c => (int?)c.index)
+            .FirstOrDefault();
 
         var descriptionCandidate = metrics
             .Select((metric, index) => new
             {
                 index,
-                AverageLength = metric.Samples == 0 ? 0 : metric.TotalLength / (double)metric.Samples
+                Score = ComputeTextScore(metric),
+                AverageLength = metric.Samples == 0 ? 0 : metric.TotalLength / (double)metric.Samples,
             })
             .Where(x => x.index != transactionDateIdx && x.index != amountIdx)
-            .OrderByDescending(x => x.AverageLength)
+            .OrderByDescending(x => x.Score)
             .FirstOrDefault();
 
-        if (descriptionCandidate == null || descriptionCandidate.AverageLength < 3)
+        if (descriptionCandidate == null || descriptionCandidate.Score <= 0 || descriptionCandidate.AverageLength < 3)
         {
             error = "Kunde inte avgöra vilken kolumn som innehåller transaktionstexten.";
             return false;
@@ -568,14 +703,14 @@ public class TransactionImportService
 
         var descriptionIdx = descriptionCandidate.index;
 
-        int? bookingDateIdx = metrics
+        var bookingDateIdx = metrics
             .Select((metric, index) => new { metric.DateMatches, index })
             .Where(x => x.index != transactionDateIdx && x.DateMatches > 0)
             .OrderByDescending(x => x.DateMatches)
             .Select(x => (int?)x.index)
             .FirstOrDefault();
 
-        int? typeIdx = metrics
+        var typeCandidate = metrics
             .Select((metric, index) => new
             {
                 index,
@@ -591,7 +726,6 @@ public class TransactionImportService
             )
             .OrderByDescending(x => x.TypeKeywordMatches)
             .ThenBy(x => x.AverageLength)
-            .Select(x => (int?)x.index)
             .FirstOrDefault();
 
         schema = new TransactionImportSchema(
@@ -599,10 +733,26 @@ public class TransactionImportService
             descriptionIdx,
             amountIdx,
             bookingDateIdx,
-            typeIdx,
+            typeCandidate?.index,
             balanceIdx,
             expectedColumnCount
         );
+
+        var sampleCountDecimal = Math.Max(1, sampleCount);
+        var dateConfidence = Math.Min(1m, dateCandidate.DateMatches / (decimal)sampleCountDecimal);
+        var amountConfidence = Math.Min(1m, metrics[amountIdx].MoneyMatches / (decimal)sampleCountDecimal);
+        var descriptionConfidence = Math.Min(
+            1m,
+            (decimal)Math.Min(1.0, descriptionCandidate.Score / 30.0)
+        );
+
+        var baseConfidence = (dateConfidence + amountConfidence + descriptionConfidence) / 3m;
+
+        var typeConfidence = typeCandidate != null
+            ? Math.Min(1m, typeCandidate.TypeKeywordMatches / (decimal)sampleCountDecimal)
+            : 0m;
+
+        confidence = Math.Min(1m, baseConfidence + typeConfidence * 0.25m);
 
         return true;
     }
@@ -700,6 +850,247 @@ public class TransactionImportService
                 }
             );
         }
+    }
+
+    private static List<TransactionImportPreviewRow> BuildPreviewRows(
+        IEnumerable<RowData> rows,
+        int previewRowCount,
+        RowData? headerRow = null
+    )
+    {
+        return rows
+            .Where(row => !IsSameRow(row, headerRow))
+            .Take(previewRowCount)
+            .Select(
+                row => new TransactionImportPreviewRow
+                {
+                    LineNumber = row.LineNumber,
+                    RawRow = row.RawRow,
+                    Columns = row.Columns.ToArray(),
+                }
+            )
+            .ToList();
+    }
+
+    private static bool IsSameRow(RowData row, RowData? headerRow)
+    {
+        return headerRow != null && row.LineNumber == headerRow.LineNumber;
+    }
+
+    private static List<TransactionImportIgnoredRow> BuildIgnoredRows(
+        IEnumerable<RowData> ignoredRows
+    )
+    {
+        return ignoredRows
+            .Select(
+                row => new TransactionImportIgnoredRow
+                {
+                    LineNumber = row.LineNumber,
+                    RawRow = row.RawRow,
+                    ColumnCount = row.Columns.Length,
+                }
+            )
+            .ToList();
+    }
+
+    private static TransactionImportSchemaDefinition BuildSchemaDefinition(TransactionImportSchema schema)
+    {
+        return new TransactionImportSchemaDefinition
+        {
+            ColumnCount = schema.ColumnCount,
+            TransactionDateIndex = schema.TransactionDateIdx,
+            DescriptionIndex = schema.DescriptionIdx,
+            AmountIndex = schema.AmountIdx,
+            BookingDateIndex = schema.BookingDateIdx,
+            TransactionKindIndex = schema.TypeIdx,
+            BalanceIndex = schema.BalanceIdx,
+        };
+    }
+
+    private static IReadOnlyList<TransactionImportPreviewColumn> BuildColumnHints(
+        TransactionImportSchema? schema,
+        RowData? headerRow,
+        int columnCount
+    )
+    {
+        var columns = new List<TransactionImportPreviewColumn>(columnCount);
+
+        for (var index = 0; index < columnCount; index++)
+        {
+            var displayName = BuildColumnDisplayName(headerRow, index);
+            columns.Add(
+                new TransactionImportPreviewColumn
+                {
+                    Index = index,
+                    DisplayName = displayName,
+                    SuggestedField = MapColumnToField(schema, index),
+                }
+            );
+        }
+
+        return columns;
+    }
+
+    private static bool TryDetectHeaderSchema(
+        List<RowData> rows,
+        int expectedColumnCount,
+        out TransactionImportSchema schema,
+        out int headerIndex,
+        out RowData? headerRow
+    )
+    {
+        schema = default!;
+        headerIndex = -1;
+        headerRow = null;
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (TryBuildSchemaFromHeader(rows[i], expectedColumnCount, out schema))
+            {
+                headerIndex = i;
+                headerRow = rows[i];
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int? FindHeaderLikeRowIndex(List<RowData> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (IsHeaderRowCandidate(rows[i]))
+            {
+                return i;
+            }
+        }
+
+        return null;
+    }
+
+    private static int? FindHeaderRowIndex(List<RowData> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (IsHeaderRowCandidate(rows[i]))
+            {
+                return i;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsHeaderRowCandidate(RowData row)
+    {
+        if (row.Columns.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var column in row.Columns)
+        {
+            if (ContainsHeaderIndicator(column))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ContainsHeaderIndicator(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return false;
+        }
+
+        var normalized = NormalizeHeaderName(input);
+        foreach (var token in HeaderIndicatorTokens)
+        {
+            if (normalized.Contains(token))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string BuildColumnDisplayName(RowData? headerRow, int index)
+    {
+        if (
+            headerRow != null
+            && index >= 0
+            && index < headerRow.Columns.Length
+            && !string.IsNullOrWhiteSpace(headerRow.Columns[index])
+        )
+        {
+            return headerRow.Columns[index];
+        }
+
+        return $"Kolumn {index}";
+    }
+
+    private static TransactionImportFieldType MapColumnToField(
+        TransactionImportSchema? schema,
+        int index
+    )
+    {
+        if (schema == null)
+        {
+            return TransactionImportFieldType.Unknown;
+        }
+
+        if (schema.TransactionDateIdx == index)
+        {
+            return TransactionImportFieldType.TransactionDate;
+        }
+
+        if (schema.BookingDateIdx == index)
+        {
+            return TransactionImportFieldType.BookingDate;
+        }
+
+        if (schema.DescriptionIdx == index)
+        {
+            return TransactionImportFieldType.Description;
+        }
+
+        if (schema.AmountIdx == index)
+        {
+            return TransactionImportFieldType.Amount;
+        }
+
+        if (schema.BalanceIdx == index)
+        {
+            return TransactionImportFieldType.Balance;
+        }
+
+        if (schema.TypeIdx == index)
+        {
+            return TransactionImportFieldType.TransactionType;
+        }
+
+        return TransactionImportFieldType.Unknown;
+    }
+
+    private static double ComputeTextScore(ColumnMetrics metric)
+    {
+        if (metric.Samples == 0)
+        {
+            return 0;
+        }
+
+        var averageLength = metric.TotalLength / (double)metric.Samples;
+        var dateFraction = Math.Min(1.0, (double)metric.DateMatches / metric.Samples);
+        var moneyFraction = Math.Min(1.0, (double)metric.MoneyMatches / metric.Samples);
+        var nonDate = 1.0 - dateFraction;
+        var nonMoney = 1.0 - moneyFraction;
+
+        return averageLength * nonDate * nonMoney;
     }
 
     private static void CleanRowCells(RowData row)
@@ -817,9 +1208,19 @@ public class TransactionImportService
     private sealed record TransactionImportProcessingContext(
         char Separator,
         int ColumnCount,
+        decimal LayoutConfidence,
         List<RowData> ValidRows,
         List<RowData> IgnoredRows
     );
+
+    private sealed record LayoutDetectionResult(
+        char Separator,
+        int ColumnCount,
+        decimal Confidence,
+        List<RowData> ParsedRows
+    );
+
+    private sealed record LayoutCandidate(char Separator, int ColumnCount, int Score);
 
     private sealed class ColumnMetrics
     {

@@ -1,4 +1,6 @@
 @page "/import"
+@using System
+@using Microsoft.AspNetCore.Components
 @using System.Linq
 @using System.Net.Http.Json
 @using System.Text
@@ -72,13 +74,23 @@
             <table class="table table-sm table-bordered mt-2">
                 <thead>
                     <tr>
-                        <th>Rad</th>
-                        <th>Original</th>
-                        @for (var columnIndex = 0;
-                            columnIndex < previewResult.ColumnCount;
-                            columnIndex++)
+                        <th class="align-middle">Rad</th>
+                        @foreach (var column in previewResult.Columns)
                         {
-                            <th>Kolumn @columnIndex</th>
+                     <th>
+                         <select
+                                    class="form-select form-select-sm"
+                                    @onchange="e => OnColumnFieldChanged(column.Index, e)"
+                                    value="@GetColumnFieldSelection(column.Index).ToString()"
+                                >
+                                    @foreach (var option in previewResult.FieldOptions)
+                                    {
+                                        <option value="@option.FieldType">
+                                     @option.DisplayName
+                                 </option>
+                             }
+                         </select>
+                     </th>
                         }
                     </tr>
                 </thead>
@@ -87,12 +99,9 @@
                     {
                         <tr>
                             <td>@row.LineNumber</td>
-                            <td>@row.RawRow</td>
-                            @for (var columnIndex = 0;
-                                columnIndex < previewResult.ColumnCount;
-                                columnIndex++)
+                            @foreach (var column in previewResult.Columns)
                             {
-                                var cellValue = row.Columns.ElementAtOrDefault(columnIndex) ?? string.Empty;
+                                var cellValue = row.Columns.ElementAtOrDefault(column.Index) ?? string.Empty;
                                 <td>@cellValue</td>
                             }
                         </tr>
@@ -113,79 +122,6 @@
                 </ul>
             </div>
         }
-
-        <div class="card mt-3">
-            <div class="card-body">
-                <h3>Välj schema</h3>
-                <p class="mb-3 text-muted">
-                    Ange kolumnindex för obligatoriska fält och eventuellt för
-                    bokföringsdatum, transaktionstyp och saldo.
-                </p>
-
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Transaktionsdatum *</label>
-                        <select class="form-select" @bind="schemaDefinition.TransactionDateIndex">
-                            @foreach (var columnIndex in columnIndexes)
-                            {
-                                <option value="@columnIndex">Kolumn @columnIndex</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Beskrivning *</label>
-                        <select class="form-select" @bind="schemaDefinition.DescriptionIndex">
-                            @foreach (var columnIndex in columnIndexes)
-                            {
-                                <option value="@columnIndex">Kolumn @columnIndex</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Belopp *</label>
-                        <select class="form-select" @bind="schemaDefinition.AmountIndex">
-                            @foreach (var columnIndex in columnIndexes)
-                            {
-                                <option value="@columnIndex">Kolumn @columnIndex</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Bokföringsdatum</label>
-                        <select class="form-select" @bind="schemaDefinition.BookingDateIndex">
-                            <option value="">Ingen</option>
-                            @foreach (var columnIndex in columnIndexes)
-                            {
-                                <option value="@columnIndex">Kolumn @columnIndex</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Transaktionstyp</label>
-                        <select class="form-select" @bind="schemaDefinition.TransactionKindIndex">
-                            <option value="">Ingen</option>
-                            @foreach (var columnIndex in columnIndexes)
-                            {
-                                <option value="@columnIndex">Kolumn @columnIndex</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Saldo</label>
-                        <select class="form-select" @bind="schemaDefinition.BalanceIndex">
-                            <option value="">Ingen</option>
-                            @foreach (var columnIndex in columnIndexes)
-                            {
-                                <option value="@columnIndex">Kolumn @columnIndex</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 }
 
@@ -273,7 +209,7 @@
 @code {
     private TransactionImportRequest importRequest = new();
     private TransactionImportPreviewResult? previewResult;
-    private List<int> columnIndexes = new();
+    private List<TransactionImportFieldType> columnFieldSelection = new();
     private TransactionImportSchemaDefinition schemaDefinition = new();
     private bool isPreviewing;
     private bool isImporting;
@@ -286,7 +222,11 @@
     private DateTime? importedAtUtc;
     private string? errorMessage;
 
-    private bool CanImport => previewResult != null && columnIndexes.Any() && !isImporting;
+    private bool CanImport =>
+        previewResult != null
+        && previewResult.Columns.Any()
+        && HasRequiredFieldsSelected()
+        && !isImporting;
 
     private async Task PreviewImportAsync()
     {
@@ -309,16 +249,10 @@
             if (response.IsSuccessStatusCode)
             {
                 previewResult = await response.Content.ReadFromJsonAsync<TransactionImportPreviewResult>();
-                var columnCount = previewResult?.ColumnCount ?? 0;
-                columnIndexes = Enumerable.Range(0, columnCount).ToList();
-
-                schemaDefinition = new TransactionImportSchemaDefinition
-                {
-                    ColumnCount = columnCount,
-                    TransactionDateIndex = columnCount > 0 ? 0 : 0,
-                    DescriptionIndex = columnCount > 1 ? 1 : 0,
-                    AmountIndex = columnCount > 2 ? 2 : (columnCount > 0 ? columnCount - 1 : 0),
-                };
+                columnFieldSelection = previewResult?.Columns
+                    .Select(column => column.SuggestedField)
+                    .ToList() ?? new List<TransactionImportFieldType>();
+                UpdateSchemaDefinitionFromSelection();
             }
             else
             {
@@ -349,6 +283,8 @@
 
         try
         {
+            UpdateSchemaDefinitionFromSelection();
+
             var client = HttpClientFactory.CreateClient("ApiClient");
             var request = new TransactionImportWithSchemaRequest
             {
@@ -393,7 +329,7 @@
         importedAtUtc = null;
         errorMessage = null;
         previewResult = null;
-        columnIndexes.Clear();
+        columnFieldSelection.Clear();
         schemaDefinition = new TransactionImportSchemaDefinition();
     }
 
@@ -410,6 +346,115 @@
             $"Svar:\n{responseText}";
     }
 
+    private void OnColumnFieldChanged(int columnIndex, ChangeEventArgs? args)
+    {
+        if (args == null)
+        {
+            return;
+        }
+
+        var value = args.Value?.ToString();
+        if (Enum.TryParse<TransactionImportFieldType>(value, out var fieldType))
+        {
+            SetColumnField(columnIndex, fieldType);
+        }
+        else
+        {
+            SetColumnField(columnIndex, TransactionImportFieldType.Unknown);
+        }
+    }
+
+    private void SetColumnField(int columnIndex, TransactionImportFieldType fieldType)
+    {
+        if (previewResult == null || columnIndex < 0)
+        {
+            return;
+        }
+
+        while (columnFieldSelection.Count <= columnIndex)
+        {
+            columnFieldSelection.Add(TransactionImportFieldType.Unknown);
+        }
+
+        columnFieldSelection[columnIndex] = fieldType;
+        UpdateSchemaDefinitionFromSelection();
+    }
+
+    private void UpdateSchemaDefinitionFromSelection()
+    {
+        if (previewResult == null)
+        {
+            schemaDefinition = new TransactionImportSchemaDefinition();
+            return;
+        }
+
+        schemaDefinition = new TransactionImportSchemaDefinition
+        {
+            ColumnCount = previewResult.ColumnCount,
+            TransactionDateIndex = GetRequiredColumnIndex(TransactionImportFieldType.TransactionDate, 0),
+            DescriptionIndex = GetRequiredColumnIndex(TransactionImportFieldType.Description, 1),
+            AmountIndex = GetRequiredColumnIndex(TransactionImportFieldType.Amount, 2),
+            BookingDateIndex = GetColumnIndexOrNull(TransactionImportFieldType.BookingDate),
+            TransactionKindIndex = GetColumnIndexOrNull(TransactionImportFieldType.TransactionType),
+            BalanceIndex = GetColumnIndexOrNull(TransactionImportFieldType.Balance),
+        };
+    }
+
+    private int? GetColumnIndexOrNull(TransactionImportFieldType fieldType)
+    {
+        if (previewResult == null)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < columnFieldSelection.Count && i < previewResult.Columns.Count; i++)
+        {
+            if (columnFieldSelection[i] == fieldType)
+            {
+                return previewResult.Columns[i].Index;
+            }
+        }
+
+        return null;
+    }
+
+    private int GetRequiredColumnIndex(TransactionImportFieldType fieldType, int fallbackIndex)
+    {
+        return GetColumnIndexOrNull(fieldType) ?? AdjustFallbackIndex(fallbackIndex);
+    }
+
+    private int AdjustFallbackIndex(int fallbackIndex)
+    {
+        if (previewResult == null || previewResult.ColumnCount == 0)
+        {
+            return 0;
+        }
+
+        if (fallbackIndex < 0)
+        {
+            return 0;
+        }
+
+        return Math.Min(previewResult.ColumnCount - 1, fallbackIndex);
+    }
+
+    private TransactionImportFieldType GetColumnFieldSelection(int columnIndex)
+    {
+        if (columnIndex >= 0 && columnIndex < columnFieldSelection.Count)
+        {
+            return columnFieldSelection[columnIndex];
+        }
+
+        return TransactionImportFieldType.Unknown;
+    }
+
+    private bool HasRequiredFieldsSelected()
+    {
+        return GetColumnIndexOrNull(TransactionImportFieldType.TransactionDate) != null
+            && GetColumnIndexOrNull(TransactionImportFieldType.Description) != null
+            && GetColumnIndexOrNull(TransactionImportFieldType.Amount) != null;
+    }
+
     public class TransactionImportRequest
     {
         public string RawText { get; set; } = "";
@@ -419,9 +464,39 @@
     {
         public char Separator { get; set; }
         public int ColumnCount { get; set; }
+        public decimal LayoutConfidence { get; set; }
+        public decimal SchemaConfidence { get; set; }
+        public TransactionImportSchemaDefinition? SuggestedSchema { get; set; }
+        public TransactionImportPreviewHeader? HeaderRow { get; set; }
+        public List<TransactionImportPreviewColumn> Columns { get; set; } = new();
+        public List<TransactionImportFieldOption> FieldOptions { get; set; } = new();
         public List<TransactionImportPreviewRow> Rows { get; set; } = new();
         public List<TransactionImportIgnoredRow> IgnoredRows { get; set; } = new();
         public List<string> ParsingErrors { get; set; } = new();
+    }
+
+    public class TransactionImportPreviewColumn
+    {
+        public int Index { get; set; }
+        public string DisplayName { get; set; } = "";
+        public TransactionImportFieldType SuggestedField { get; set; }
+    }
+
+    public class TransactionImportFieldOption
+    {
+        public TransactionImportFieldType FieldType { get; set; }
+        public string DisplayName { get; set; } = "";
+    }
+
+    public enum TransactionImportFieldType
+    {
+        Unknown,
+        TransactionDate,
+        BookingDate,
+        Description,
+        Amount,
+        Balance,
+        TransactionType,
     }
 
     public class TransactionImportPreviewRow
@@ -436,6 +511,12 @@
         public int LineNumber { get; set; }
         public string RawRow { get; set; } = "";
         public int ColumnCount { get; set; }
+    }
+
+    public class TransactionImportPreviewHeader
+    {
+        public int LineNumber { get; set; }
+        public List<string> Columns { get; set; } = new();
     }
 
     public class TransactionImportSchemaDefinition
