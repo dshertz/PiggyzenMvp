@@ -17,7 +17,9 @@ public class TransactionImportPreviewResult
         TransactionImportFieldOption.DefaultFieldOptions;
     public IReadOnlyList<TransactionImportPreviewRow> Rows { get; init; } =
         Array.Empty<TransactionImportPreviewRow>();
-    public IReadOnlyList<TransactionImportIgnoredRow> IgnoredRows { get; init; } =
+    public IReadOnlyList<TransactionImportIgnoredRow> LayoutIgnoredRows { get; init; } =
+        Array.Empty<TransactionImportIgnoredRow>();
+    public IReadOnlyList<TransactionImportIgnoredRow> PreviewIgnoredRows { get; init; } =
         Array.Empty<TransactionImportIgnoredRow>();
     public List<string> ParsingErrors { get; } = new();
 }
@@ -98,6 +100,7 @@ public class TransactionImportIgnoredRow
     public int LineNumber { get; init; }
     public string RawRow { get; init; } = string.Empty;
     public int ColumnCount { get; init; }
+    public string Reason { get; init; } = string.Empty;
 }
 
 public class TransactionImportPreviewHeader

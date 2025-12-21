@@ -91,6 +91,7 @@ public class TransactionImportService
     private const int MaxLayoutSampleRows = 200;
     private const int MaxSchemaSampleRows = 50;
     private const int MinLayoutColumnCount = 3;
+    private const string LayoutIgnoreReason = "Felaktigt antal kolumner";
 
     private readonly NormalizeService _normalizeService;
 
@@ -110,7 +111,7 @@ public class TransactionImportService
         }
 
         var safeContext = context!;
-        var ignoredRows = BuildIgnoredRows(safeContext.IgnoredRows);
+        var layoutIgnoredRows = BuildIgnoredRows(safeContext.IgnoredRows, LayoutIgnoreReason);
 
         if (
             !TryBuildSchema(
@@ -132,7 +133,7 @@ public class TransactionImportService
                 ColumnCount = safeContext.ColumnCount,
                 LayoutConfidence = safeContext.LayoutConfidence,
                 Rows = BuildPreviewRows(safeContext.ValidRows, previewRowCount, headerRow),
-                IgnoredRows = ignoredRows,
+                LayoutIgnoredRows = layoutIgnoredRows,
                 Columns = fallbackColumns,
                 HeaderRow = headerDetected && headerRow != null
                     ? new TransactionImportPreviewHeader
@@ -152,7 +153,11 @@ public class TransactionImportService
             headerDetected && headerRow != null ? headerRow : null,
             safeContext.ColumnCount
         );
-        var previewRows = BuildPreviewRows(dataRows, previewRowCount, headerRow);
+        var (previewEligibleRows, previewIgnoredRows) = BuildPreviewEligibleRows(
+            dataRows,
+            schema
+        );
+        var previewRows = BuildPreviewRows(previewEligibleRows, previewRowCount, headerRow);
 
         preview = new TransactionImportPreviewResult
         {
@@ -169,8 +174,9 @@ public class TransactionImportService
                 }
                 : null,
             Rows = previewRows,
-            IgnoredRows = ignoredRows,
             Columns = columnHints,
+            LayoutIgnoredRows = layoutIgnoredRows,
+            PreviewIgnoredRows = previewIgnoredRows,
         };
 
         return preview;
@@ -765,36 +771,15 @@ public class TransactionImportService
     {
         foreach (var row in rows)
         {
-            if (row.Columns.Length < schema.ColumnCount)
+            if (!TryValidateBasic(row, schema, out var validationReason))
             {
-                result.ParsingErrors.Add(
-                    $"Rad {row.LineNumber}: Raden innehåller {row.Columns.Length} kolumner men {schema.ColumnCount} förväntades."
-                );
+                result.ParsingErrors.Add(validationReason);
                 continue;
             }
 
-            if (!TryParseDate(row.Columns[schema.TransactionDateIdx], out var transactionDate))
-            {
-                result.ParsingErrors.Add(
-                    $"Rad {row.LineNumber}: Ogiltigt transaktionsdatum: \"{row.Columns[schema.TransactionDateIdx]}\""
-                );
-                continue;
-            }
-
+            TryParseDate(row.Columns[schema.TransactionDateIdx], out var transactionDate);
             var description = row.Columns[schema.DescriptionIdx];
-            if (string.IsNullOrWhiteSpace(description))
-            {
-                result.ParsingErrors.Add($"Rad {row.LineNumber}: Textbeskrivning saknas.");
-                continue;
-            }
-
-            if (!TryParseAmount(row.Columns[schema.AmountIdx], out var amount))
-            {
-                result.ParsingErrors.Add(
-                    $"Rad {row.LineNumber}: Ogiltigt belopp: \"{row.Columns[schema.AmountIdx]}\""
-                );
-                continue;
-            }
+            TryParseAmount(row.Columns[schema.AmountIdx], out var amount);
 
             decimal? balance = null;
             if (schema.BalanceIdx.HasValue)
@@ -878,19 +863,24 @@ public class TransactionImportService
     }
 
     private static List<TransactionImportIgnoredRow> BuildIgnoredRows(
-        IEnumerable<RowData> ignoredRows
+        IEnumerable<RowData> ignoredRows,
+        string reason
     )
     {
         return ignoredRows
-            .Select(
-                row => new TransactionImportIgnoredRow
-                {
-                    LineNumber = row.LineNumber,
-                    RawRow = row.RawRow,
-                    ColumnCount = row.Columns.Length,
-                }
-            )
+            .Select(row => BuildIgnoredRow(row, reason))
             .ToList();
+    }
+
+    private static TransactionImportIgnoredRow BuildIgnoredRow(RowData row, string reason)
+    {
+        return new TransactionImportIgnoredRow
+        {
+            LineNumber = row.LineNumber,
+            RawRow = row.RawRow,
+            ColumnCount = row.Columns.Length,
+            Reason = reason,
+        };
     }
 
     private static TransactionImportSchemaDefinition BuildSchemaDefinition(TransactionImportSchema schema)
@@ -929,6 +919,30 @@ public class TransactionImportService
         }
 
         return columns;
+    }
+
+    private static (List<RowData> EligibleRows, List<TransactionImportIgnoredRow> IgnoredRows)
+        BuildPreviewEligibleRows(
+            List<RowData> dataRows,
+            TransactionImportSchema schema
+        )
+    {
+        var eligibleRows = new List<RowData>();
+        var ignoredRows = new List<TransactionImportIgnoredRow>();
+
+        foreach (var row in dataRows)
+        {
+            if (TryValidateBasic(row, schema, out var reason))
+            {
+                eligibleRows.Add(row);
+            }
+            else
+            {
+                ignoredRows.Add(BuildIgnoredRow(row, reason));
+            }
+        }
+
+        return (eligibleRows, ignoredRows);
     }
 
     private static bool TryDetectHeaderSchema(
@@ -1091,6 +1105,41 @@ public class TransactionImportService
         var nonMoney = 1.0 - moneyFraction;
 
         return averageLength * nonDate * nonMoney;
+    }
+
+    private static bool TryValidateBasic(RowData row, TransactionImportSchema schema, out string reason)
+    {
+        reason = string.Empty;
+
+        if (row.Columns.Length < schema.ColumnCount)
+        {
+            reason =
+                $"Rad {row.LineNumber}: Raden innehåller {row.Columns.Length} kolumner men {schema.ColumnCount} förväntades.";
+            return false;
+        }
+
+        if (!TryParseDate(row.Columns[schema.TransactionDateIdx], out _))
+        {
+            reason =
+                $"Rad {row.LineNumber}: Ogiltigt transaktionsdatum: \"{row.Columns[schema.TransactionDateIdx]}\"";
+            return false;
+        }
+
+        var description = row.Columns[schema.DescriptionIdx];
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            reason = $"Rad {row.LineNumber}: Textbeskrivning saknas.";
+            return false;
+        }
+
+        if (!TryParseAmount(row.Columns[schema.AmountIdx], out _))
+        {
+            reason =
+                $"Rad {row.LineNumber}: Ogiltigt belopp: \"{row.Columns[schema.AmountIdx]}\"";
+            return false;
+        }
+
+        return true;
     }
 
     private static void CleanRowCells(RowData row)

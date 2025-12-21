@@ -110,14 +110,35 @@
             </table>
         </div>
 
-        @if (previewResult.IgnoredRows.Any())
+        @if (previewResult.LayoutIgnoredRows.Any())
         {
             <div class="alert alert-info mt-3">
                 <strong>Ignorerade rader (felaktigt kolumnantal):</strong>
                 <ul>
-                    @foreach (var ignored in previewResult.IgnoredRows)
+                    @foreach (var ignored in previewResult.LayoutIgnoredRows)
                     {
-                        <li>Rad @ignored.LineNumber – @ignored.ColumnCount kolumner</li>
+                        <li>
+                            Rad @ignored.LineNumber – @ignored.ColumnCount kolumner
+                            @if (!string.IsNullOrWhiteSpace(ignored.Reason))
+                            {
+                                <span>: @ignored.Reason</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (previewResult.PreviewIgnoredRows.Any())
+        {
+            <div class="alert alert-info mt-3">
+                <strong>Ignorerade rader (ogiltiga fält):</strong>
+                <ul>
+                    @foreach (var ignored in previewResult.PreviewIgnoredRows)
+                    {
+                        <li>
+                            Rad @ignored.LineNumber – @ignored.Reason
+                        </li>
                     }
                 </ul>
             </div>
@@ -471,7 +492,8 @@
         public List<TransactionImportPreviewColumn> Columns { get; set; } = new();
         public List<TransactionImportFieldOption> FieldOptions { get; set; } = new();
         public List<TransactionImportPreviewRow> Rows { get; set; } = new();
-        public List<TransactionImportIgnoredRow> IgnoredRows { get; set; } = new();
+        public List<TransactionImportIgnoredRow> LayoutIgnoredRows { get; set; } = new();
+        public List<TransactionImportIgnoredRow> PreviewIgnoredRows { get; set; } = new();
         public List<string> ParsingErrors { get; set; } = new();
     }
 
@@ -506,12 +528,13 @@
         public List<string> Columns { get; set; } = new();
     }
 
-    public class TransactionImportIgnoredRow
-    {
-        public int LineNumber { get; set; }
-        public string RawRow { get; set; } = "";
-        public int ColumnCount { get; set; }
-    }
+public class TransactionImportIgnoredRow
+{
+    public int LineNumber { get; set; }
+    public string RawRow { get; set; } = "";
+    public int ColumnCount { get; set; }
+    public string Reason { get; set; } = "";
+}
 
     public class TransactionImportPreviewHeader
     {
