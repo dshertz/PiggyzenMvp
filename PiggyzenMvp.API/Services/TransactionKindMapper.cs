@@ -29,6 +29,11 @@ public class TransactionKindMapper
         var normalizedDescriptionForMatching = ImportNormalization.NormalizeText(normalizedDescription);
         var originalDescriptionForMatching = ImportNormalization.NormalizeText(originalDescription);
 
+        if (IsSwishType(normalizedTypeRaw))
+        {
+            return TransactionKind.Swish;
+        }
+
         foreach (var rule in _importConfig.KindRules)
         {
             if (ContainsKeyword(normalizedTypeRaw, rule.Keywords)
@@ -67,5 +72,11 @@ public class TransactionKindMapper
         }
 
         return false;
+    }
+
+    private static bool IsSwishType(string normalizedTypeRaw)
+    {
+        return !string.IsNullOrWhiteSpace(normalizedTypeRaw)
+            && normalizedTypeRaw.Contains("swish", StringComparison.Ordinal);
     }
 }

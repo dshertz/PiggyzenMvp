@@ -11,7 +11,8 @@ public sealed class EffectiveImportConfig
         IReadOnlyDictionary<string, HeaderField> headerAliasesNormalized,
         IReadOnlyList<string> headerIndicatorTokens,
         IReadOnlyList<string> typeIndicatorTokens,
-        IReadOnlyList<KindRule> kindRules)
+        IReadOnlyList<KindRule> kindRules,
+        ImportTransforms transforms)
     {
         CandidateSeparators = candidateSeparators ?? throw new ArgumentNullException(nameof(candidateSeparators));
         DateFormats = dateFormats ?? throw new ArgumentNullException(nameof(dateFormats));
@@ -19,6 +20,7 @@ public sealed class EffectiveImportConfig
         HeaderIndicatorTokens = headerIndicatorTokens ?? throw new ArgumentNullException(nameof(headerIndicatorTokens));
         TypeIndicatorTokens = typeIndicatorTokens ?? throw new ArgumentNullException(nameof(typeIndicatorTokens));
         KindRules = kindRules ?? throw new ArgumentNullException(nameof(kindRules));
+        Transforms = transforms ?? throw new ArgumentNullException(nameof(transforms));
     }
 
     public IReadOnlyList<char> CandidateSeparators { get; }
@@ -27,4 +29,5 @@ public sealed class EffectiveImportConfig
     public IReadOnlyList<string> HeaderIndicatorTokens { get; }
     public IReadOnlyList<string> TypeIndicatorTokens { get; }
     public IReadOnlyList<KindRule> KindRules { get; }
+    public ImportTransforms Transforms { get; }
 }

@@ -680,6 +680,8 @@ public class TransactionImportService
     {
         foreach (var row in rows)
         {
+            ApplySwishTransforms(row, schema);
+
             if (!TryValidateBasic(row, schema, out var validationReason))
             {
                 result.ParsingErrors.Add(validationReason);
@@ -743,6 +745,43 @@ public class TransactionImportService
                     RawRow = row.RawRow,
                 }
             );
+        }
+    }
+
+    private static bool ShouldCopySwishTypeToDescription(string? typeRaw)
+    {
+        if (string.IsNullOrWhiteSpace(typeRaw))
+        {
+            return false;
+        }
+
+        var normalizedType = ImportNormalization.NormalizeText(typeRaw);
+        return normalizedType.Contains("swish", StringComparison.Ordinal);
+    }
+
+    private void ApplySwishTransforms(RowData row, TransactionImportSchema schema)
+    {
+        if (
+            !_importConfig.Transforms.SwishCopyTypeToDescriptionWhenEmpty
+            || !schema.TypeIdx.HasValue
+        )
+        {
+            return;
+        }
+
+        var descriptionIdx = schema.DescriptionIdx;
+        var typeIdx = schema.TypeIdx.Value;
+        if (descriptionIdx == typeIdx)
+        {
+            return;
+        }
+
+        var descriptionValue = row.Columns[descriptionIdx];
+        var typeValue = row.Columns[typeIdx];
+
+        if (string.IsNullOrWhiteSpace(descriptionValue) && ShouldCopySwishTypeToDescription(typeValue))
+        {
+            row.Columns[descriptionIdx] = typeValue ?? string.Empty;
         }
     }
 
@@ -841,6 +880,8 @@ public class TransactionImportService
 
         foreach (var row in dataRows)
         {
+            ApplySwishTransforms(row, schema);
+
             if (TryValidateBasic(row, schema, out var reason))
             {
                 eligibleRows.Add(row);

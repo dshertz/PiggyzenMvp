@@ -10,4 +10,5 @@ public sealed class ImportProfile
     public string[]? HeaderIndicatorTokens { get; set; }
     public string[]? TypeIndicatorTokens { get; set; }
     public KindRuleDefinition[]? KindRules { get; set; }
+    public ImportTransforms? Transforms { get; set; }
 }

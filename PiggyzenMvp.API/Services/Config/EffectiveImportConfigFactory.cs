@@ -113,6 +113,7 @@ public sealed class EffectiveImportConfigFactory
         var typeIndicatorTokens = new HashSet<string>(StringComparer.Ordinal);
         var keywordMapping = new Dictionary<string, TransactionKind>(StringComparer.Ordinal);
         var orderedKeywordEntries = new List<(TransactionKind Kind, string Keyword)>();
+        var transforms = new ImportTransforms();
 
         foreach (var section in sections)
         {
@@ -122,6 +123,7 @@ public sealed class EffectiveImportConfigFactory
             MergeHeaderIndicatorTokens(section.Profile, headerIndicatorTokens);
             MergeTypeIndicatorTokens(section.Profile, typeIndicatorTokens);
             MergeKindRules(section.Profile, section.SourceName, keywordMapping, orderedKeywordEntries);
+            MergeTransforms(section.Profile, transforms);
         }
 
         EnsureFallbacks(separators, dateFormats);
@@ -137,7 +139,8 @@ public sealed class EffectiveImportConfigFactory
             headerAliases,
             headerIndicatorTokens.ToList(),
             typeIndicatorTokens.ToList(),
-            kindRules);
+            kindRules,
+            transforms);
     }
 
     private void MergeSeparators(ImportProfile profile, HashSet<char> separators)
@@ -321,6 +324,19 @@ public sealed class EffectiveImportConfigFactory
                 keywordMapping[normalizedKeyword] = kind;
                 orderedKeywordEntries.Add((kind, normalizedKeyword));
             }
+        }
+    }
+
+    private void MergeTransforms(ImportProfile profile, ImportTransforms transforms)
+    {
+        if (profile.Transforms == null)
+        {
+            return;
+        }
+
+        if (profile.Transforms.SwishCopyTypeToDescriptionWhenEmpty)
+        {
+            transforms.SwishCopyTypeToDescriptionWhenEmpty = true;
         }
     }
 
