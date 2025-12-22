@@ -1,0 +1,109 @@
+{
+    "candidateSeparators": ["\t", ";", ","],
+    "dateFormats": [
+        "yyyy-MM-dd",
+        "yyyy/MM/dd",
+        "dd-MM-yyyy",
+        "dd/MM/yyyy",
+        "MM-dd-yyyy",
+        "MM/dd/yyyy"
+    ],
+    "headerAliases": {
+        "transaktionsdatum": "TransactionDate",
+        "transactiondatum": "TransactionDate",
+        "transactiondate": "TransactionDate",
+        "bokforingsdatum": "BookingDate",
+        "bookingdate": "BookingDate",
+        "meddelande": "Description",
+        "meddelandetext": "Description",
+        "text": "Description",
+        "textmeddelande": "Description",
+        "beskrivning": "Description",
+        "referens": "Description",
+        "motpart": "Description",
+        "transaktionstyp": "Type",
+        "transactiontype": "Type",
+        "typ": "Type",
+        "type": "Type",
+        "belopp": "Amount",
+        "insattning": "Amount",
+        "uttag": "Amount",
+        "amount": "Amount",
+        "insattninguttag": "Amount",
+        "saldo": "Balance",
+        "behallning": "Balance",
+        "balans": "Balance",
+        "balance": "Balance"
+    },
+    "headerIndicatorTokens": [
+        "kontonummer",
+        "kontonamn",
+        "konto",
+        "saldo",
+        "tillgangligt",
+        "tillgangligtbelopp",
+        "bokforingsdatum",
+        "transaktionsdatum",
+        "transaktionstyp",
+        "transaktionstypen",
+        "meddelande",
+        "belopp",
+        "mottagare"
+    ],
+    "typeIndicatorTokens": [
+        "swish",
+        "kort",
+        "card",
+        "autogiro",
+        "betal",
+        "avgift",
+        "overforing",
+        "transfer",
+        "insattning",
+        "kontant",
+        "deposit",
+        "loan",
+        "lan",
+        "amort",
+        "ranta",
+        "rabatt"
+    ],
+    "kindRules": [
+        {
+            "kind": "CardPurchase",
+            "keywords": ["Kortköp"]
+        },
+        {
+            "kind": "Swish",
+            "keywords": ["Swish"]
+        },
+        {
+            "kind": "Payment",
+            "keywords": ["Betalning", "Autogiro"]
+        },
+        {
+            "kind": "Fee",
+            "keywords": ["Avg", "Årsavg"]
+        },
+        {
+            "kind": "Transfer",
+            "keywords": ["Överföring"]
+        },
+        {
+            "kind": "Deposit",
+            "keywords": ["Insättning", "Kontantinsättning"]
+        },
+        {
+            "kind": "LoanPayment",
+            "keywords": ["Låneinbetalning"]
+        },
+        {
+            "kind": "Interest",
+            "keywords": ["Ränta"]
+        },
+        {
+            "kind": "Adjustment",
+            "keywords": ["Rabatt"]
+        }
+    ]
+}

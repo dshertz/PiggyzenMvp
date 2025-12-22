@@ -1,0 +1,47 @@
+{
+    "dateFormats": ["yyyy-MM-dd"],
+    "headerAliases": {
+        "bokföringsdatum": "BookingDate",
+        "behållning": "Balance",
+        "insättning/uttag": "Amount",
+        "insättning": "Amount"
+    },
+    "kindRules": [
+        {
+            "kind": "CardPurchase",
+            "keywords": ["Kortköp"]
+        },
+        {
+            "kind": "Transfer",
+            "keywords": ["Överföring"]
+        },
+        {
+            "kind": "Fee",
+            "keywords": ["Avg", "Årsavg"]
+        },
+        {
+            "kind": "Payment",
+            "keywords": ["Betalning", "Autogiro"]
+        },
+        {
+            "kind": "Deposit",
+            "keywords": ["Kontantinsättning", "Insättning"]
+        },
+        {
+            "kind": "Interest",
+            "keywords": ["Ränta"]
+        },
+        {
+            "kind": "Adjustment",
+            "keywords": ["Rabatt"]
+        },
+        {
+            "kind": "LoanPayment",
+            "keywords": ["Låneinbetalning"]
+        },
+        {
+            "kind": "Swish",
+            "keywords": ["Swish"]
+        }
+    ]
+}

@@ -4,100 +4,26 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using PiggyzenMvp.API.DTOs;
+using PiggyzenMvp.API.Services.Config;
 
 namespace PiggyzenMvp.API.Services;
 
 public class TransactionImportService
 {
-    private static readonly char[] CandidateSeparators = new[] { '\t', ';', ',' };
-
-    private static readonly string[] DateFormats =
-    {
-        "yyyy-MM-dd",
-        "yyyy/MM/dd",
-        "dd-MM-yyyy",
-        "dd/MM/yyyy",
-        "MM-dd-yyyy",
-        "MM/dd/yyyy",
-    };
-
-    private static readonly IReadOnlyDictionary<string, HeaderField> HeaderAliases =
-        new Dictionary<string, HeaderField>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["transaktionsdatum"] = HeaderField.TransactionDate,
-            ["transactiondatum"] = HeaderField.TransactionDate,
-            ["transactiondate"] = HeaderField.TransactionDate,
-            ["bokforingsdatum"] = HeaderField.BookingDate,
-            ["bookingdate"] = HeaderField.BookingDate,
-            ["meddelande"] = HeaderField.Description,
-            ["meddelandetext"] = HeaderField.Description,
-            ["text"] = HeaderField.Description,
-            ["textmeddelande"] = HeaderField.Description,
-            ["beskrivning"] = HeaderField.Description,
-            ["referens"] = HeaderField.Description,
-            ["motpart"] = HeaderField.Description,
-            ["transaktionstyp"] = HeaderField.Type,
-            ["transactiontype"] = HeaderField.Type,
-            ["typ"] = HeaderField.Type,
-            ["type"] = HeaderField.Type,
-            ["belopp"] = HeaderField.Amount,
-            ["insattning"] = HeaderField.Amount,
-            ["uttag"] = HeaderField.Amount,
-            ["amount"] = HeaderField.Amount,
-            ["insattninguttag"] = HeaderField.Amount,
-            ["saldo"] = HeaderField.Balance,
-            ["behallning"] = HeaderField.Balance,
-            ["balans"] = HeaderField.Balance,
-            ["balance"] = HeaderField.Balance,
-        };
-
-    private static readonly string[] TypeIndicatorTokens =
-    {
-        "swish",
-        "kort",
-        "card",
-        "autogiro",
-        "betal",
-        "avgift",
-        "overforing",
-        "transfer",
-        "insattning",
-        "kontant",
-        "deposit",
-        "loan",
-        "lan",
-        "amort",
-        "ranta",
-        "rabatt",
-    };
-
-    private static readonly string[] HeaderIndicatorTokens =
-    {
-        "kontonummer",
-        "kontonamn",
-        "konto",
-        "saldo",
-        "tillgangligt",
-        "tillgangligtbelopp",
-        "bokforingsdatum",
-        "transaktionsdatum",
-        "transaktionstyp",
-        "transaktionstypen",
-        "meddelande",
-        "belopp",
-        "mottagare",
-    };
-
     private const int MaxLayoutSampleRows = 200;
     private const int MaxSchemaSampleRows = 50;
     private const int MinLayoutColumnCount = 3;
     private const string LayoutIgnoreReason = "Felaktigt antal kolumner";
 
     private readonly NormalizeService _normalizeService;
+    private readonly EffectiveImportConfig _importConfig;
+    private readonly string[] _dateFormats;
 
-    public TransactionImportService(NormalizeService normalizeService)
+    public TransactionImportService(NormalizeService normalizeService, EffectiveImportConfig importConfig)
     {
         _normalizeService = normalizeService;
+        _importConfig = importConfig;
+        _dateFormats = importConfig.DateFormats.ToArray();
     }
 
     public TransactionImportPreviewResult PreparePreview(string rawText, int previewRowCount = 5)
@@ -336,7 +262,7 @@ public class TransactionImportService
         return true;
     }
 
-    private static bool TryDetectLayout(
+    private bool TryDetectLayout(
         List<InputRow> rows,
         out LayoutDetectionResult result,
         out string? error
@@ -360,7 +286,7 @@ public class TransactionImportService
 
         LayoutCandidate? bestCandidate = null;
 
-        foreach (var candidate in CandidateSeparators)
+        foreach (var candidate in _importConfig.CandidateSeparators)
         {
             var splits = sampleRows
                 .Select(row => new RowData(row.LineNumber, row.Text, SplitRow(row.Text, candidate)))
@@ -444,7 +370,7 @@ public class TransactionImportService
 
     private static string[] SplitRow(string text, char separator) => text.Split(separator);
 
-    private static bool TryBuildSchema(
+    private bool TryBuildSchema(
         List<RowData> validRows,
         int expectedColumnCount,
         out TransactionImportSchema schema,
@@ -507,7 +433,7 @@ public class TransactionImportService
         return false;
     }
 
-    private static bool TryBuildSchemaFromHeader(
+    private bool TryBuildSchemaFromHeader(
         RowData headerRow,
         int expectedColumnCount,
         out TransactionImportSchema schema
@@ -521,8 +447,8 @@ public class TransactionImportService
 
         for (var index = 0; index < headerRow.Columns.Length; index++)
         {
-            var headerKey = NormalizeHeaderName(headerRow.Columns[index]);
-            if (HeaderAliases.TryGetValue(headerKey, out var field)
+            var headerKey = ImportNormalization.NormalizeHeader(headerRow.Columns[index]);
+            if (_importConfig.HeaderAliasesNormalized.TryGetValue(headerKey, out var field)
                 && !headerMap.ContainsKey(field))
             {
                 headerMap[field] = index;
@@ -562,24 +488,7 @@ public class TransactionImportService
         return true;
     }
 
-    private static string NormalizeHeaderName(string input)
-    {
-        var normalized = input.ToLowerInvariant();
-        normalized = normalized.Replace("å", "a").Replace("ä", "a").Replace("ö", "o");
-        var builder = new StringBuilder();
-
-        foreach (var ch in normalized)
-        {
-            if (char.IsLetterOrDigit(ch))
-            {
-                builder.Append(ch);
-            }
-        }
-
-        return builder.ToString();
-    }
-
-    private static bool TryInferSchema(
+    private bool TryInferSchema(
         List<RowData> validRows,
         int expectedColumnCount,
         out TransactionImportSchema schema,
@@ -635,8 +544,8 @@ public class TransactionImportService
                     }
                 }
 
-                var normalized = NormalizeForSchemaValue(cell);
-                foreach (var token in TypeIndicatorTokens)
+                var normalized = ImportNormalization.NormalizeText(cell);
+                foreach (var token in _importConfig.TypeIndicatorTokens)
                 {
                     if (normalized.Contains(token))
                     {
@@ -921,7 +830,7 @@ public class TransactionImportService
         return columns;
     }
 
-    private static (List<RowData> EligibleRows, List<TransactionImportIgnoredRow> IgnoredRows)
+    private (List<RowData> EligibleRows, List<TransactionImportIgnoredRow> IgnoredRows)
         BuildPreviewEligibleRows(
             List<RowData> dataRows,
             TransactionImportSchema schema
@@ -945,7 +854,7 @@ public class TransactionImportService
         return (eligibleRows, ignoredRows);
     }
 
-    private static bool TryDetectHeaderSchema(
+    private bool TryDetectHeaderSchema(
         List<RowData> rows,
         int expectedColumnCount,
         out TransactionImportSchema schema,
@@ -970,7 +879,7 @@ public class TransactionImportService
         return false;
     }
 
-    private static int? FindHeaderLikeRowIndex(List<RowData> rows)
+    private int? FindHeaderLikeRowIndex(List<RowData> rows)
     {
         for (var i = 0; i < rows.Count; i++)
         {
@@ -983,7 +892,7 @@ public class TransactionImportService
         return null;
     }
 
-    private static int? FindHeaderRowIndex(List<RowData> rows)
+    private int? FindHeaderRowIndex(List<RowData> rows)
     {
         for (var i = 0; i < rows.Count; i++)
         {
@@ -996,7 +905,7 @@ public class TransactionImportService
         return null;
     }
 
-    private static bool IsHeaderRowCandidate(RowData row)
+    private bool IsHeaderRowCandidate(RowData row)
     {
         if (row.Columns.Length == 0)
         {
@@ -1014,15 +923,15 @@ public class TransactionImportService
         return false;
     }
 
-    private static bool ContainsHeaderIndicator(string? input)
+    private bool ContainsHeaderIndicator(string? input)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
             return false;
         }
 
-        var normalized = NormalizeHeaderName(input);
-        foreach (var token in HeaderIndicatorTokens)
+        var normalized = ImportNormalization.NormalizeHeader(input);
+        foreach (var token in _importConfig.HeaderIndicatorTokens)
         {
             if (normalized.Contains(token))
             {
@@ -1107,7 +1016,7 @@ public class TransactionImportService
         return averageLength * nonDate * nonMoney;
     }
 
-    private static bool TryValidateBasic(RowData row, TransactionImportSchema schema, out string reason)
+    private bool TryValidateBasic(RowData row, TransactionImportSchema schema, out string reason)
     {
         reason = string.Empty;
 
@@ -1167,26 +1076,7 @@ public class TransactionImportService
         return cleaned;
     }
 
-    private static string NormalizeForSchemaValue(string? input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            return string.Empty;
-        }
-
-        var normalized = input.Trim().ToLowerInvariant();
-        normalized = normalized.Replace("å", "a").Replace("ä", "a").Replace("ö", "o");
-        var builder = new StringBuilder(normalized.Length);
-
-        foreach (var ch in normalized)
-        {
-            builder.Append(char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch) ? ch : ' ');
-        }
-
-        return builder.ToString();
-    }
-
-    private static bool TryParseDate(string input, out DateTime? date)
+    private bool TryParseDate(string input, out DateTime? date)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -1198,7 +1088,7 @@ public class TransactionImportService
 
         var parsed = DateTime.TryParseExact(
             trimmed,
-            DateFormats,
+            _dateFormats,
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out var parsedDate
@@ -1281,13 +1171,4 @@ public class TransactionImportService
         public int TotalLength;
     }
 
-    private enum HeaderField
-    {
-        TransactionDate,
-        BookingDate,
-        Description,
-        Type,
-        Amount,
-        Balance,
-    }
 }
