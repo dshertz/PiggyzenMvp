@@ -79,11 +79,11 @@ public class TransactionImportService
             headerDetected && headerRow != null ? headerRow : null,
             safeContext.ColumnCount
         );
-        var (previewEligibleRows, previewIgnoredRows) = BuildPreviewEligibleRows(
+        var (previewRows, previewIgnoredRows) = BuildPreviewRowsWithStatus(
             dataRows,
-            schema
+            schema,
+            safeContext.IgnoredRows
         );
-        var previewRows = BuildPreviewRows(previewEligibleRows, previewRowCount, headerRow);
 
         preview = new TransactionImportPreviewResult
         {
@@ -869,30 +869,58 @@ public class TransactionImportService
         return columns;
     }
 
-    private (List<RowData> EligibleRows, List<TransactionImportIgnoredRow> IgnoredRows)
-        BuildPreviewEligibleRows(
-            List<RowData> dataRows,
-            TransactionImportSchema schema
-        )
+    private (List<TransactionImportPreviewRow> Rows, List<TransactionImportIgnoredRow> IgnoredRows)
+        BuildPreviewRowsWithStatus(
+            IEnumerable<RowData> dataRows,
+            TransactionImportSchema schema,
+            IReadOnlyList<RowData> layoutIgnoredRows)
     {
-        var eligibleRows = new List<RowData>();
+        var rows = new List<TransactionImportPreviewRow>();
         var ignoredRows = new List<TransactionImportIgnoredRow>();
 
         foreach (var row in dataRows)
         {
             ApplySwishTransforms(row, schema);
 
-            if (TryValidateBasic(row, schema, out var reason))
+            if (TryValidateBasic(row, schema, out var validationReason))
             {
-                eligibleRows.Add(row);
+                rows.Add(CreatePreviewRow(row));
             }
             else
             {
-                ignoredRows.Add(BuildIgnoredRow(row, reason));
+                rows.Add(CreatePreviewRow(row, TransactionImportPreviewRowStatus.Invalid, validationReason));
+                ignoredRows.Add(BuildIgnoredRow(row, validationReason));
             }
         }
 
-        return (eligibleRows, ignoredRows);
+        foreach (var layoutRow in layoutIgnoredRows)
+        {
+            rows.Add(
+                CreatePreviewRow(
+                    layoutRow,
+                    TransactionImportPreviewRowStatus.LayoutIgnored,
+                    LayoutIgnoreReason
+                )
+            );
+        }
+
+        rows.Sort((a, b) => a.LineNumber.CompareTo(b.LineNumber));
+        return (rows, ignoredRows);
+    }
+
+    private static TransactionImportPreviewRow CreatePreviewRow(
+        RowData row,
+        TransactionImportPreviewRowStatus status = TransactionImportPreviewRowStatus.Normal,
+        string? ignoredReason = null)
+    {
+        return new TransactionImportPreviewRow
+        {
+            LineNumber = row.LineNumber,
+            RawRow = row.RawRow,
+            Columns = row.Columns.ToArray(),
+            Status = status,
+            IgnoredReason = ignoredReason,
+        };
     }
 
     private bool TryDetectHeaderSchema(

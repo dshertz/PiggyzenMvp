@@ -93,6 +93,8 @@ public class TransactionImportPreviewRow
     public int LineNumber { get; init; }
     public string RawRow { get; init; } = string.Empty;
     public IReadOnlyList<string> Columns { get; init; } = Array.Empty<string>();
+    public TransactionImportPreviewRowStatus Status { get; init; } = TransactionImportPreviewRowStatus.Normal;
+    public string? IgnoredReason { get; init; }
 }
 
 public class TransactionImportIgnoredRow
@@ -107,4 +109,11 @@ public class TransactionImportPreviewHeader
 {
     public int LineNumber { get; init; }
     public IReadOnlyList<string> Columns { get; init; } = Array.Empty<string>();
+}
+
+public enum TransactionImportPreviewRowStatus
+{
+    Normal,
+    Invalid,
+    LayoutIgnored,
 }

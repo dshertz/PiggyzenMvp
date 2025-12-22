@@ -97,8 +97,14 @@
                 <tbody>
                     @foreach (var row in previewResult.Rows)
                     {
-                        <tr>
-                            <td>@row.LineNumber</td>
+                        <tr class="@GetPreviewRowClass(row)">
+                            <td>
+                                @row.LineNumber
+                                @if (!string.IsNullOrWhiteSpace(row.IgnoredReason))
+                                {
+                                    <div class="small text-danger">@row.IgnoredReason</div>
+                                }
+                            </td>
                             @foreach (var column in previewResult.Columns)
                             {
                                 var cellValue = row.Columns.ElementAtOrDefault(column.Index) ?? string.Empty;
@@ -476,6 +482,16 @@
             && GetColumnIndexOrNull(TransactionImportFieldType.Amount) != null;
     }
 
+    private string GetPreviewRowClass(TransactionImportPreviewRow row)
+    {
+        return row.Status switch
+        {
+            TransactionImportPreviewRowStatus.LayoutIgnored => "table-secondary text-muted",
+            TransactionImportPreviewRowStatus.Invalid => "table-warning",
+            _ => string.Empty,
+        };
+    }
+
     public class TransactionImportRequest
     {
         public string RawText { get; set; } = "";
@@ -526,6 +542,15 @@
         public int LineNumber { get; set; }
         public string RawRow { get; set; } = "";
         public List<string> Columns { get; set; } = new();
+        public TransactionImportPreviewRowStatus Status { get; set; } = TransactionImportPreviewRowStatus.Normal;
+        public string? IgnoredReason { get; set; }
+    }
+
+    public enum TransactionImportPreviewRowStatus
+    {
+        Normal,
+        Invalid,
+        LayoutIgnored,
     }
 
 public class TransactionImportIgnoredRow
