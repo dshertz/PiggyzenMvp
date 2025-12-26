@@ -1,16 +1,20 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using PiggyzenMvp.API.Models;
 
-namespace PiggyzenMvp.API.Services.Config;
+namespace PiggyzenMvp.API.Services.Imports;
 
-public sealed class EffectiveImportConfigFactory
+public sealed class ImportConfigService
 {
+    private const string DefaultProfileKey = "import.default.json";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -26,56 +30,132 @@ public sealed class EffectiveImportConfigFactory
         "dd-MM-yyyy",
         "dd/MM/yyyy",
         "MM-dd-yyyy",
-        "MM/dd/yyyy"
+        "MM/dd/yyyy",
     };
 
     private readonly IWebHostEnvironment _environment;
-    private readonly ILogger<EffectiveImportConfigFactory> _logger;
+    private readonly ILogger<ImportConfigService> _logger;
+    private readonly ConcurrentDictionary<string, Task<ResolvedImportConfig>> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public EffectiveImportConfigFactory(
+    public ImportConfigService(
         IWebHostEnvironment environment,
-        ILogger<EffectiveImportConfigFactory> logger)
+        ILogger<ImportConfigService> logger)
     {
         _environment = environment;
         _logger = logger;
     }
 
-    public EffectiveImportConfig Create()
+    public Task<ResolvedImportConfig> GetAsync(string? profileName)
     {
-        var definitions = LoadDefinitions();
-        return BuildEffectiveConfig(definitions);
+        var normalizedKey = NormalizeProfileKey(profileName);
+        return _cache.GetOrAdd(normalizedKey, _ => Task.FromResult(BuildResolvedConfig(normalizedKey)));
     }
 
-    private IReadOnlyList<ImportSection> LoadDefinitions()
+    private ResolvedImportConfig BuildResolvedConfig(string profileKey)
     {
-        var sections = new List<ImportSection>();
-        var repoRoot = Path.GetFullPath(Path.Combine(_environment.ContentRootPath, ".."));
-        var configRoot = Path.Combine(repoRoot, "Config", "Import");
-        var defaultPath = Path.Combine(configRoot, "import.default.json");
-        sections.Add(
-            new ImportSection(
-                "import.default.json",
-                LoadProfile(defaultPath, "import.default.json", MinimalDefaultProfile())));
-
-        var banksRoot = Path.Combine(configRoot, "banks");
-        if (Directory.Exists(banksRoot))
+        var configRoot = GetConfigRootPath();
+        var sections = new List<ImportSource>
         {
-            var bankFiles = Directory.GetFiles(banksRoot, "*.json")
-                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase);
+            new(
+                DefaultProfileKey,
+                LoadProfile(
+                    Path.Combine(configRoot, DefaultProfileKey),
+                    DefaultProfileKey,
+                    MinimalDefaultProfile()))
+        };
 
-            foreach (var bankFile in bankFiles)
+        if (string.Equals(profileKey, DefaultProfileKey, StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var bankProfile in EnumerateBankProfiles(configRoot))
             {
-                var sourceName = Path.GetRelativePath(configRoot, bankFile);
-                var profile = LoadProfile(bankFile, sourceName, new ImportProfile());
-                sections.Add(new ImportSection(sourceName, profile));
+                sections.Add(new(bankProfile.SourceName, LoadProfile(bankProfile.Path, bankProfile.SourceName, new ImportProfile())));
             }
         }
         else
         {
-            _logger.LogInformation("Banks directory {BanksRoot} was not found, skipping bank overrides", banksRoot);
+            var profilePath = ResolveProfilePath(profileKey, configRoot);
+            sections.Add(new(profileKey, LoadProfile(profilePath, profileKey, new ImportProfile())));
         }
 
-        return sections;
+        return MergeSections(sections);
+    }
+
+    private static string NormalizeProfileKey(string? profileName)
+    {
+        var candidate = string.IsNullOrWhiteSpace(profileName)
+            ? DefaultProfileKey
+            : profileName.Trim();
+
+        candidate = candidate.Replace('\\', '/');
+        while (candidate.StartsWith("./", StringComparison.Ordinal))
+        {
+            candidate = candidate[2..];
+        }
+
+        if (candidate.Length == 0)
+        {
+            return DefaultProfileKey;
+        }
+
+        if (!candidate.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            candidate += ".json";
+        }
+
+        var segments = candidate
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Where(segment => segment != "." && segment != "..")
+            .ToArray();
+
+        if (segments.Length == 0)
+        {
+            return DefaultProfileKey;
+        }
+
+        return string.Join('/', segments);
+    }
+
+    private static string ResolveProfilePath(string normalizedKey, string configRoot)
+    {
+        var segments = normalizedKey.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0)
+        {
+            return Path.Combine(configRoot, DefaultProfileKey);
+        }
+
+        var parts = new string[segments.Length + 1];
+        parts[0] = configRoot;
+        for (var i = 0; i < segments.Length; i++)
+        {
+            parts[i + 1] = segments[i];
+        }
+
+        return Path.Combine(parts);
+    }
+
+    private string GetConfigRootPath()
+    {
+        var repoRoot = Path.GetFullPath(Path.Combine(_environment.ContentRootPath, ".."));
+        return Path.Combine(repoRoot, "Config", "Import");
+    }
+
+    private IEnumerable<(string SourceName, string Path)> EnumerateBankProfiles(string configRoot)
+    {
+        var banksRoot = Path.Combine(configRoot, "banks");
+        if (!Directory.Exists(banksRoot))
+        {
+            _logger.LogInformation("Banks directory {BanksRoot} was not found, skipping bank overrides", banksRoot);
+            yield break;
+        }
+
+        var bankFiles = Directory.GetFiles(banksRoot, "*.json")
+            .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var bankFile in bankFiles)
+        {
+            var sourceName = Path.GetRelativePath(configRoot, bankFile);
+            yield return (sourceName, bankFile);
+        }
     }
 
     private ImportProfile LoadProfile(string path, string sourceName, ImportProfile fallback)
@@ -105,7 +185,7 @@ public sealed class EffectiveImportConfigFactory
         }
     }
 
-    private EffectiveImportConfig BuildEffectiveConfig(IReadOnlyList<ImportSection> sections)
+    private ResolvedImportConfig MergeSections(IReadOnlyList<ImportSource> sections)
     {
         var separators = new HashSet<char>();
         var dateFormats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -130,7 +210,7 @@ public sealed class EffectiveImportConfigFactory
             .Select(group => new KindRule(group.Key, group.Select(entry => entry.Keyword).ToList()))
             .ToList();
 
-        return new EffectiveImportConfig(
+        return new ResolvedImportConfig(
             separators.ToList(),
             dateFormats.ToList(),
             headerAliases,
@@ -206,7 +286,11 @@ public sealed class EffectiveImportConfigFactory
 
             if (!Enum.TryParse<HeaderField>(target, true, out var field))
             {
-                _logger.LogWarning("Header alias '{Header}' in {Source} targets unknown field '{Target}'", alias.Key, sourceName, target);
+                _logger.LogWarning(
+                    "Header alias '{Header}' in {Source} targets unknown field '{Target}'",
+                    alias.Key,
+                    sourceName,
+                    target);
                 continue;
             }
 
@@ -219,8 +303,7 @@ public sealed class EffectiveImportConfigFactory
                         alias.Key,
                         sourceName,
                         field,
-                        existingField
-                    );
+                        existingField);
                 }
 
                 continue;
@@ -241,15 +324,15 @@ public sealed class EffectiveImportConfigFactory
             return;
         }
 
-            foreach (var rule in profile.KindRules)
+        foreach (var rule in profile.KindRules)
+        {
+            if (string.IsNullOrWhiteSpace(rule.Kind))
             {
-                if (string.IsNullOrWhiteSpace(rule.Kind))
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                if (!Enum.TryParse<TransactionKind>(rule.Kind, true, out var kind))
-                {
+            if (!Enum.TryParse<TransactionKind>(rule.Kind, true, out var kind))
+            {
                 _logger.LogWarning("Kind rule in {Source} references unknown kind '{Kind}'", sourceName, rule.Kind);
                 continue;
             }
@@ -271,8 +354,7 @@ public sealed class EffectiveImportConfigFactory
                             keyword,
                             sourceName,
                             kind,
-                            existingKind
-                        );
+                            existingKind);
                     }
 
                     continue;
@@ -297,9 +379,7 @@ public sealed class EffectiveImportConfigFactory
         }
     }
 
-    private void EnsureFallbacks(
-        HashSet<char> separators,
-        HashSet<string> dateFormats)
+    private void EnsureFallbacks(HashSet<char> separators, HashSet<string> dateFormats)
     {
         if (!separators.Any())
         {
@@ -337,5 +417,60 @@ public sealed class EffectiveImportConfigFactory
         };
     }
 
-    private sealed record ImportSection(string SourceName, ImportProfile Profile);
+    private sealed record ImportSource(string SourceName, ImportProfile Profile);
+
+    public sealed class ResolvedImportConfig
+    {
+        public ResolvedImportConfig(
+            IReadOnlyList<char> candidateSeparators,
+            IReadOnlyList<string> dateFormats,
+            IReadOnlyDictionary<string, HeaderField> headerAliasesNormalized,
+            IReadOnlyList<KindRule> kindRules,
+            ImportTransforms transforms)
+        {
+            CandidateSeparators = candidateSeparators ?? throw new ArgumentNullException(nameof(candidateSeparators));
+            DateFormats = dateFormats ?? throw new ArgumentNullException(nameof(dateFormats));
+            HeaderAliasesNormalized = headerAliasesNormalized ?? throw new ArgumentNullException(nameof(headerAliasesNormalized));
+            KindRules = kindRules ?? throw new ArgumentNullException(nameof(kindRules));
+            Transforms = transforms ?? throw new ArgumentNullException(nameof(transforms));
+        }
+
+        public IReadOnlyList<char> CandidateSeparators { get; }
+        public IReadOnlyList<string> DateFormats { get; }
+        public IReadOnlyDictionary<string, HeaderField> HeaderAliasesNormalized { get; }
+        public IReadOnlyList<KindRule> KindRules { get; }
+        public ImportTransforms Transforms { get; }
+    }
+
+    public sealed class ImportProfile
+    {
+        public string[]? CandidateSeparators { get; set; }
+        public string[]? DateFormats { get; set; }
+        public Dictionary<string, string>? HeaderAliases { get; set; }
+        public KindRuleDefinition[]? KindRules { get; set; }
+        public ImportTransforms? Transforms { get; set; }
+    }
+
+    public sealed class KindRuleDefinition
+    {
+        public string Kind { get; set; } = string.Empty;
+        public string[]? Keywords { get; set; }
+    }
+
+    public sealed class KindRule
+    {
+        public KindRule(TransactionKind kind, IReadOnlyList<string> keywords)
+        {
+            Kind = kind;
+            Keywords = keywords;
+        }
+
+        public TransactionKind Kind { get; }
+        public IReadOnlyList<string> Keywords { get; }
+    }
+
+    public sealed class ImportTransforms
+    {
+        public bool SwishCopyTypeToDescriptionWhenEmpty { get; set; }
+    }
 }

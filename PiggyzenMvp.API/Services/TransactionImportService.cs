@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using PiggyzenMvp.API.DTOs;
-using PiggyzenMvp.API.Services.Config;
+using ResolvedImportConfig = PiggyzenMvp.API.Services.Imports.ImportConfigService.ResolvedImportConfig;
 
 namespace PiggyzenMvp.API.Services;
 
@@ -16,10 +16,10 @@ public class TransactionImportService
     private const string LayoutIgnoreReason = "Felaktigt antal kolumner";
 
     private readonly NormalizeService _normalizeService;
-    private readonly EffectiveImportConfig _importConfig;
+    private readonly ResolvedImportConfig _importConfig;
     private readonly string[] _dateFormats;
 
-    public TransactionImportService(NormalizeService normalizeService, EffectiveImportConfig importConfig)
+    public TransactionImportService(NormalizeService normalizeService, ResolvedImportConfig importConfig)
     {
         _normalizeService = normalizeService;
         _importConfig = importConfig;

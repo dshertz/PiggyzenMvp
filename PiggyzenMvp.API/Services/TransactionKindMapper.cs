@@ -2,7 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using PiggyzenMvp.API.Models;
-using PiggyzenMvp.API.Services.Config;
+using ResolvedImportConfig = PiggyzenMvp.API.Services.Imports.ImportConfigService.ResolvedImportConfig;
 
 namespace PiggyzenMvp.API.Services;
 
@@ -10,9 +10,9 @@ public class TransactionKindMapper
 {
     private readonly ConcurrentDictionary<string, int> _unknownCounts = new();
     private readonly ILogger<TransactionKindMapper> _logger;
-    private readonly EffectiveImportConfig _importConfig;
+    private readonly ResolvedImportConfig _importConfig;
 
-    public TransactionKindMapper(ILogger<TransactionKindMapper> logger, EffectiveImportConfig importConfig)
+    public TransactionKindMapper(ILogger<TransactionKindMapper> logger, ResolvedImportConfig importConfig)
     {
         _logger = logger;
         _importConfig = importConfig;
