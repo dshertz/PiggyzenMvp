@@ -102,7 +102,7 @@
                                 @row.LineNumber
                                 @if (!string.IsNullOrWhiteSpace(row.IgnoredReason))
                                 {
-                                    <div class="small text-danger">@row.IgnoredReason</div>
+                                    <div class="small @GetPreviewReasonClass(row)">@row.IgnoredReason</div>
                                 }
                             </td>
                             @foreach (var column in previewResult.Columns)
@@ -116,39 +116,6 @@
             </table>
         </div>
 
-        @if (previewResult.LayoutIgnoredRows.Any())
-        {
-            <div class="alert alert-info mt-3">
-                <strong>Ignorerade rader (felaktigt kolumnantal):</strong>
-                <ul>
-                    @foreach (var ignored in previewResult.LayoutIgnoredRows)
-                    {
-                        <li>
-                            Rad @ignored.LineNumber – @ignored.ColumnCount kolumner
-                            @if (!string.IsNullOrWhiteSpace(ignored.Reason))
-                            {
-                                <span>: @ignored.Reason</span>
-                            }
-                        </li>
-                    }
-                </ul>
-            </div>
-        }
-
-        @if (previewResult.PreviewIgnoredRows.Any())
-        {
-            <div class="alert alert-info mt-3">
-                <strong>Ignorerade rader (ogiltiga fält):</strong>
-                <ul>
-                    @foreach (var ignored in previewResult.PreviewIgnoredRows)
-                    {
-                        <li>
-                            Rad @ignored.LineNumber – @ignored.Reason
-                        </li>
-                    }
-                </ul>
-            </div>
-        }
     </div>
 }
 
@@ -486,9 +453,21 @@
     {
         return row.Status switch
         {
-            TransactionImportPreviewRowStatus.LayoutIgnored => "table-secondary text-muted",
-            TransactionImportPreviewRowStatus.Invalid => "table-warning",
+            TransactionImportPreviewRowStatus.Header => "table-secondary text-muted",
+            TransactionImportPreviewRowStatus.NonData => "table-secondary text-muted",
+            TransactionImportPreviewRowStatus.InvalidColumnCount => "table-warning",
+            TransactionImportPreviewRowStatus.ParseError => "table-warning",
             _ => string.Empty,
+        };
+    }
+
+    private string GetPreviewReasonClass(TransactionImportPreviewRow row)
+    {
+        return row.Status switch
+        {
+            TransactionImportPreviewRowStatus.Header => "text-muted",
+            TransactionImportPreviewRowStatus.NonData => "text-muted",
+            _ => "text-danger",
         };
     }
 
@@ -508,8 +487,6 @@
         public List<TransactionImportPreviewColumn> Columns { get; set; } = new();
         public List<TransactionImportFieldOption> FieldOptions { get; set; } = new();
         public List<TransactionImportPreviewRow> Rows { get; set; } = new();
-        public List<TransactionImportIgnoredRow> LayoutIgnoredRows { get; set; } = new();
-        public List<TransactionImportIgnoredRow> PreviewIgnoredRows { get; set; } = new();
         public List<string> ParsingErrors { get; set; } = new();
     }
 
@@ -542,24 +519,18 @@
         public int LineNumber { get; set; }
         public string RawRow { get; set; } = "";
         public List<string> Columns { get; set; } = new();
-        public TransactionImportPreviewRowStatus Status { get; set; } = TransactionImportPreviewRowStatus.Normal;
+        public TransactionImportPreviewRowStatus Status { get; set; } = TransactionImportPreviewRowStatus.Accepted;
         public string? IgnoredReason { get; set; }
     }
 
     public enum TransactionImportPreviewRowStatus
     {
-        Normal,
-        Invalid,
-        LayoutIgnored,
+        Accepted,
+        Header,
+        NonData,
+        InvalidColumnCount,
+        ParseError,
     }
-
-public class TransactionImportIgnoredRow
-{
-    public int LineNumber { get; set; }
-    public string RawRow { get; set; } = "";
-    public int ColumnCount { get; set; }
-    public string Reason { get; set; } = "";
-}
 
     public class TransactionImportPreviewHeader
     {

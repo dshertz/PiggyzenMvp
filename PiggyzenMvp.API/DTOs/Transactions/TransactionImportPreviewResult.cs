@@ -17,10 +17,6 @@ public class TransactionImportPreviewResult
         TransactionImportFieldOption.DefaultFieldOptions;
     public IReadOnlyList<TransactionImportPreviewRow> Rows { get; init; } =
         Array.Empty<TransactionImportPreviewRow>();
-    public IReadOnlyList<TransactionImportIgnoredRow> LayoutIgnoredRows { get; init; } =
-        Array.Empty<TransactionImportIgnoredRow>();
-    public IReadOnlyList<TransactionImportIgnoredRow> PreviewIgnoredRows { get; init; } =
-        Array.Empty<TransactionImportIgnoredRow>();
     public List<string> ParsingErrors { get; } = new();
 }
 
@@ -93,16 +89,8 @@ public class TransactionImportPreviewRow
     public int LineNumber { get; init; }
     public string RawRow { get; init; } = string.Empty;
     public IReadOnlyList<string> Columns { get; init; } = Array.Empty<string>();
-    public TransactionImportPreviewRowStatus Status { get; init; } = TransactionImportPreviewRowStatus.Normal;
+    public TransactionImportPreviewRowStatus Status { get; init; } = TransactionImportPreviewRowStatus.Accepted;
     public string? IgnoredReason { get; init; }
-}
-
-public class TransactionImportIgnoredRow
-{
-    public int LineNumber { get; init; }
-    public string RawRow { get; init; } = string.Empty;
-    public int ColumnCount { get; init; }
-    public string Reason { get; init; } = string.Empty;
 }
 
 public class TransactionImportPreviewHeader
@@ -113,7 +101,9 @@ public class TransactionImportPreviewHeader
 
 public enum TransactionImportPreviewRowStatus
 {
-    Normal,
-    Invalid,
-    LayoutIgnored,
+    Accepted,
+    Header,
+    NonData,
+    InvalidColumnCount,
+    ParseError,
 }

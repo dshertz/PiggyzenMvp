@@ -13,8 +13,6 @@ public class TransactionImportService
     private const int MaxLayoutSampleRows = 200;
     private const int MaxSchemaSampleRows = 50;
     private const int MinLayoutColumnCount = 3;
-    private const string LayoutIgnoreReason = "Felaktigt antal kolumner";
-
     private readonly NormalizeService _normalizeService;
     private readonly ResolvedImportConfig _importConfig;
     private readonly string[] _dateFormats;
@@ -37,14 +35,13 @@ public class TransactionImportService
         }
 
         var safeContext = context!;
-        var layoutIgnoredRows = BuildIgnoredRows(safeContext.IgnoredRows, LayoutIgnoreReason);
 
         if (
             !TryBuildSchema(
                 safeContext.ValidRows,
                 safeContext.ColumnCount,
                 out var schema,
-                out var dataRows,
+                out _,
                 out var schemaConfidence,
                 out var headerDetected,
                 out var headerRow,
@@ -58,8 +55,7 @@ public class TransactionImportService
                 Separator = safeContext.Separator,
                 ColumnCount = safeContext.ColumnCount,
                 LayoutConfidence = safeContext.LayoutConfidence,
-                Rows = BuildPreviewRows(safeContext.ValidRows, previewRowCount, headerRow),
-                LayoutIgnoredRows = layoutIgnoredRows,
+                Rows = BuildFallbackPreviewRows(safeContext, previewRowCount),
                 Columns = fallbackColumns,
                 HeaderRow = headerDetected && headerRow != null
                     ? new TransactionImportPreviewHeader
@@ -79,11 +75,7 @@ public class TransactionImportService
             headerDetected && headerRow != null ? headerRow : null,
             safeContext.ColumnCount
         );
-        var (previewRows, previewIgnoredRows) = BuildPreviewRowsWithStatus(
-            dataRows,
-            schema,
-            safeContext.IgnoredRows
-        );
+        var previewRows = BuildPreviewRowsWithStatus(safeContext, schema);
 
         preview = new TransactionImportPreviewResult
         {
@@ -101,8 +93,6 @@ public class TransactionImportService
                 : null,
             Rows = previewRows,
             Columns = columnHints,
-            LayoutIgnoredRows = layoutIgnoredRows,
-            PreviewIgnoredRows = previewIgnoredRows,
         };
 
         return preview;
@@ -151,7 +141,10 @@ public class TransactionImportService
             safeContext.ColumnCount
         );
 
-        ParseRows(safeContext.ValidRows, manualSchema, result);
+        var dataRowsForParsing = safeContext.ValidRows
+            .Where(row => row.Classification == RowClassification.DataCandidate)
+            .ToList();
+        ParseRows(dataRowsForParsing, manualSchema, result);
 
         if (!result.Transactions.Any() && !result.ParsingErrors.Any())
         {
@@ -189,7 +182,10 @@ public class TransactionImportService
             result.ParsingErrors.Add(schemaError ?? "Kunde inte avgöra kolumnerna.");
             return result;
         }
-        ParseRows(dataRows, schema, result);
+        var dataRowsForParsing = dataRows
+            .Where(row => row.Classification == RowClassification.DataCandidate)
+            .ToList();
+        ParseRows(dataRowsForParsing, schema, result);
 
         if (!result.Transactions.Any() && !result.ParsingErrors.Any())
         {
@@ -206,12 +202,15 @@ public class TransactionImportService
 
     private static List<InputRow> SplitIntoRows(string normalized)
     {
-        return normalized
-            .Split('\n')
-            .Select(row => row.Trim())
-            .Where(row => !string.IsNullOrWhiteSpace(row))
-            .Select((value, index) => new InputRow(value, index + 1))
-            .ToList();
+        var lines = normalized.Split('\n');
+        var rows = new List<InputRow>(lines.Length);
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var value = lines[index].Trim();
+            rows.Add(new InputRow(value, index + 1));
+        }
+
+        return rows;
     }
 
     private bool TryCreateProcessingContext(
@@ -232,7 +231,7 @@ public class TransactionImportService
         var normalized = NormalizeLineEndings(rawText);
         var inputRows = SplitIntoRows(normalized);
 
-        if (!inputRows.Any())
+        if (!inputRows.Any(row => !string.IsNullOrWhiteSpace(row.Text)))
         {
             errors.Add("Ingen användbar text hittades.");
             return false;
@@ -244,7 +243,8 @@ public class TransactionImportService
             return false;
         }
 
-        FilterRows(layout.ParsedRows, layout.ColumnCount, out var validRows, out var ignoredRows);
+        var parsedRows = layout.ParsedRows;
+        FilterRows(parsedRows, layout.ColumnCount, out var validRows, out var ignoredRows);
 
         foreach (var row in validRows)
         {
@@ -255,6 +255,7 @@ public class TransactionImportService
             layout.Separator,
             layout.ColumnCount,
             layout.Confidence,
+            parsedRows,
             validRows,
             ignoredRows
         );
@@ -278,7 +279,7 @@ public class TransactionImportService
         }
 
         var sampleRows = rows.Take(MaxLayoutSampleRows).ToList();
-        if (!sampleRows.Any())
+        if (!sampleRows.Any(row => !string.IsNullOrWhiteSpace(row.Text)))
         {
             error = "Ingen användbar text hittades.";
             return false;
@@ -288,13 +289,31 @@ public class TransactionImportService
 
         foreach (var candidate in _importConfig.CandidateSeparators)
         {
-            var splits = sampleRows
-                .Select(row => new RowData(row.LineNumber, row.Text, SplitRow(row.Text, candidate)))
+            var classifiedSamples = sampleRows
+                .Select(row => ClassifyRow(row, candidate))
                 .ToList();
 
-            var columnGroups = splits
-                .GroupBy(r => r.Columns.Length)
-                .OrderByDescending(g => g.Count())
+            var dataCandidates = classifiedSamples
+                .Where(row => row.Classification == RowClassification.DataCandidate)
+                .ToList();
+
+            if (!dataCandidates.Any())
+            {
+                dataCandidates = rows
+                    .Select(row => ClassifyRow(row, candidate))
+                    .Where(row => row.Classification == RowClassification.DataCandidate)
+                    .ToList();
+            }
+
+            if (!dataCandidates.Any())
+            {
+                continue;
+            }
+
+            var columnGroups = dataCandidates
+                .GroupBy(row => row.Columns.Length)
+                .OrderByDescending(group => group.Count())
+                .ThenByDescending(group => group.Key)
                 .ToList();
 
             if (!columnGroups.Any())
@@ -326,20 +345,27 @@ public class TransactionImportService
             return false;
         }
 
-        var parsedRows = rows
-            .Select(row => new RowData(row.LineNumber, row.Text, SplitRow(row.Text, bestCandidate.Separator)))
+        var classifiedRows = rows
+            .Select(row => ClassifyRow(row, bestCandidate.Separator))
             .ToList();
 
-        var sampleCount = sampleRows.Count;
+        var sampleClassified = classifiedRows.Take(sampleRows.Count).ToList();
+        var sampleDataCandidates = sampleClassified
+            .Where(row => row.Classification == RowClassification.DataCandidate)
+            .ToList();
+
+        var sampleCount = sampleDataCandidates.Count;
+        var matchingCount = sampleDataCandidates.Count(row => row.Columns.Length == bestCandidate.ColumnCount);
+
         var confidence = sampleCount > 0
-            ? Math.Min(1m, bestCandidate.Score / (decimal)sampleCount)
+            ? Math.Min(1m, matchingCount / (decimal)sampleCount)
             : 0m;
 
         result = new LayoutDetectionResult(
             bestCandidate.Separator,
             bestCandidate.ColumnCount,
             confidence,
-            parsedRows
+            classifiedRows
         );
 
         return true;
@@ -357,6 +383,11 @@ public class TransactionImportService
 
         foreach (var row in parsedRows)
         {
+            if (row.Classification == RowClassification.NonData)
+            {
+                continue;
+            }
+
             if (row.Columns.Length == expectedColumnCount)
             {
                 validRows.Add(row);
@@ -369,6 +400,89 @@ public class TransactionImportService
     }
 
     private static string[] SplitRow(string text, char separator) => text.Split(separator);
+
+    private RowData ClassifyRow(InputRow row, char separator)
+    {
+        var columns = SplitRow(row.Text, separator);
+
+        if (IsHeaderRowCandidate(columns))
+        {
+            return new RowData(
+                row.LineNumber,
+                row.Text,
+                columns,
+                RowClassification.Header,
+                "Rubrikrad"
+            );
+        }
+
+        if (IsNonDataRow(row.Text) || columns.Length < MinLayoutColumnCount)
+        {
+            return new RowData(
+                row.LineNumber,
+                row.Text,
+                columns,
+                RowClassification.NonData,
+                "Det här är inte transaktionsdata."
+            );
+        }
+
+        return new RowData(
+            row.LineNumber,
+            row.Text,
+            columns,
+            RowClassification.DataCandidate,
+            null
+        );
+    }
+
+    private bool IsHeaderRowCandidate(string[] columns)
+    {
+        if (columns.Length == 0)
+        {
+            return false;
+        }
+
+        var matchCount = 0;
+        foreach (var column in columns)
+        {
+            if (!IsHeaderAlias(column))
+            {
+                continue;
+            }
+
+            matchCount++;
+            if (matchCount >= 2)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsNonDataRow(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return true;
+        }
+
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0)
+        {
+            return true;
+        }
+
+        var compressed = trimmed.Replace(" ", string.Empty);
+        const string separatorChars = "-–_=*.";
+        if (compressed.Length > 0 && compressed.All(ch => separatorChars.Contains(ch)))
+        {
+            return true;
+        }
+
+        return false;
+    }
 
     private bool TryBuildSchema(
         List<RowData> validRows,
@@ -754,50 +868,109 @@ public class TransactionImportService
         }
     }
 
-    private static List<TransactionImportPreviewRow> BuildPreviewRows(
-        IEnumerable<RowData> rows,
-        int previewRowCount,
-        RowData? headerRow = null
-    )
+    private static List<TransactionImportPreviewRow> BuildFallbackPreviewRows(
+        TransactionImportProcessingContext context,
+        int previewRowCount)
     {
-        return rows
-            .Where(row => !IsSameRow(row, headerRow))
-            .Take(previewRowCount)
-            .Select(
-                row => new TransactionImportPreviewRow
-                {
-                    LineNumber = row.LineNumber,
-                    RawRow = row.RawRow,
-                    Columns = row.Columns.ToArray(),
-                }
-            )
-            .ToList();
-    }
-
-    private static bool IsSameRow(RowData row, RowData? headerRow)
-    {
-        return headerRow != null && row.LineNumber == headerRow.LineNumber;
-    }
-
-    private static List<TransactionImportIgnoredRow> BuildIgnoredRows(
-        IEnumerable<RowData> ignoredRows,
-        string reason
-    )
-    {
-        return ignoredRows
-            .Select(row => BuildIgnoredRow(row, reason))
-            .ToList();
-    }
-
-    private static TransactionImportIgnoredRow BuildIgnoredRow(RowData row, string reason)
-    {
-        return new TransactionImportIgnoredRow
+        var rows = new List<TransactionImportPreviewRow>(previewRowCount);
+        foreach (var row in context.ParsedRows.OrderBy(r => r.LineNumber))
         {
-            LineNumber = row.LineNumber,
-            RawRow = row.RawRow,
-            ColumnCount = row.Columns.Length,
-            Reason = reason,
-        };
+            var status = row.Classification switch
+            {
+                RowClassification.Header => TransactionImportPreviewRowStatus.Header,
+                RowClassification.NonData => TransactionImportPreviewRowStatus.NonData,
+                RowClassification.DataCandidate when row.Columns.Length != context.ColumnCount =>
+                    TransactionImportPreviewRowStatus.InvalidColumnCount,
+                _ => TransactionImportPreviewRowStatus.Accepted,
+            };
+
+            string? reason = status switch
+            {
+                TransactionImportPreviewRowStatus.Header => row.ClassificationReason,
+                TransactionImportPreviewRowStatus.NonData => row.ClassificationReason,
+                TransactionImportPreviewRowStatus.InvalidColumnCount =>
+                    BuildColumnCountMismatchReason(row, context.ColumnCount),
+                _ => null,
+            };
+
+            rows.Add(CreatePreviewRow(row, status, reason));
+
+            if (rows.Count >= previewRowCount)
+            {
+                break;
+            }
+        }
+
+        return rows;
+    }
+
+    private List<TransactionImportPreviewRow> BuildPreviewRowsWithStatus(
+        TransactionImportProcessingContext context,
+        TransactionImportSchema schema)
+    {
+        var rows = new List<TransactionImportPreviewRow>(context.ParsedRows.Count);
+        foreach (var row in context.ParsedRows.OrderBy(r => r.LineNumber))
+        {
+            if (row.Classification == RowClassification.Header)
+            {
+                rows.Add(
+                    CreatePreviewRow(
+                        row,
+                        TransactionImportPreviewRowStatus.Header,
+                        row.ClassificationReason
+                    )
+                );
+                continue;
+            }
+
+            if (row.Classification == RowClassification.NonData)
+            {
+                rows.Add(
+                    CreatePreviewRow(
+                        row,
+                        TransactionImportPreviewRowStatus.NonData,
+                        row.ClassificationReason
+                    )
+                );
+                continue;
+            }
+
+            if (row.Columns.Length != context.ColumnCount)
+            {
+                rows.Add(
+                    CreatePreviewRow(
+                        row,
+                        TransactionImportPreviewRowStatus.InvalidColumnCount,
+                        BuildColumnCountMismatchReason(row, context.ColumnCount)
+                    )
+                );
+                continue;
+            }
+
+            ApplySwishTransforms(row, schema);
+
+            if (TryValidateBasic(row, schema, out var validationReason))
+            {
+                rows.Add(CreatePreviewRow(row));
+            }
+            else
+            {
+                rows.Add(
+                    CreatePreviewRow(
+                        row,
+                        TransactionImportPreviewRowStatus.ParseError,
+                        validationReason
+                    )
+                );
+            }
+        }
+
+        return rows;
+    }
+
+    private static string BuildColumnCountMismatchReason(RowData row, int expectedColumnCount)
+    {
+        return $"Rad {row.LineNumber}: Raden innehåller {row.Columns.Length} kolumner men {expectedColumnCount} förväntades.";
     }
 
     private static TransactionImportSchemaDefinition BuildSchemaDefinition(TransactionImportSchema schema)
@@ -838,48 +1011,9 @@ public class TransactionImportService
         return columns;
     }
 
-    private (List<TransactionImportPreviewRow> Rows, List<TransactionImportIgnoredRow> IgnoredRows)
-        BuildPreviewRowsWithStatus(
-            IEnumerable<RowData> dataRows,
-            TransactionImportSchema schema,
-            IReadOnlyList<RowData> layoutIgnoredRows)
-    {
-        var rows = new List<TransactionImportPreviewRow>();
-        var ignoredRows = new List<TransactionImportIgnoredRow>();
-
-        foreach (var row in dataRows)
-        {
-            ApplySwishTransforms(row, schema);
-
-            if (TryValidateBasic(row, schema, out var validationReason))
-            {
-                rows.Add(CreatePreviewRow(row));
-            }
-            else
-            {
-                rows.Add(CreatePreviewRow(row, TransactionImportPreviewRowStatus.Invalid, validationReason));
-                ignoredRows.Add(BuildIgnoredRow(row, validationReason));
-            }
-        }
-
-        foreach (var layoutRow in layoutIgnoredRows)
-        {
-            rows.Add(
-                CreatePreviewRow(
-                    layoutRow,
-                    TransactionImportPreviewRowStatus.LayoutIgnored,
-                    LayoutIgnoreReason
-                )
-            );
-        }
-
-        rows.Sort((a, b) => a.LineNumber.CompareTo(b.LineNumber));
-        return (rows, ignoredRows);
-    }
-
     private static TransactionImportPreviewRow CreatePreviewRow(
         RowData row,
-        TransactionImportPreviewRowStatus status = TransactionImportPreviewRowStatus.Normal,
+        TransactionImportPreviewRowStatus status = TransactionImportPreviewRowStatus.Accepted,
         string? ignoredReason = null)
     {
         return new TransactionImportPreviewRow
@@ -891,7 +1025,6 @@ public class TransactionImportService
             IgnoredReason = ignoredReason,
         };
     }
-
     private bool TryDetectHeaderSchema(
         List<RowData> rows,
         int expectedColumnCount,
@@ -921,38 +1054,13 @@ public class TransactionImportService
     {
         for (var i = 0; i < rows.Count; i++)
         {
-            if (IsHeaderRowCandidate(rows[i]))
+            if (IsHeaderRowCandidate(rows[i].Columns))
             {
                 return i;
             }
         }
 
         return null;
-    }
-
-    private bool IsHeaderRowCandidate(RowData row)
-    {
-        if (row.Columns.Length == 0)
-        {
-            return false;
-        }
-
-        var matchCount = 0;
-        foreach (var column in row.Columns)
-        {
-            if (!IsHeaderAlias(column))
-            {
-                continue;
-            }
-
-            matchCount++;
-            if (matchCount >= 2)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private bool IsHeaderAlias(string? input)
@@ -1156,7 +1264,20 @@ public class TransactionImportService
 
     private sealed record InputRow(string Text, int LineNumber);
 
-    private sealed record RowData(int LineNumber, string RawRow, string[] Columns);
+    private sealed record RowData(
+        int LineNumber,
+        string RawRow,
+        string[] Columns,
+        RowClassification Classification,
+        string? ClassificationReason
+    );
+
+    private enum RowClassification
+    {
+        Header,
+        NonData,
+        DataCandidate,
+    }
 
     private sealed record TransactionImportSchema(
         int TransactionDateIdx,
@@ -1172,6 +1293,7 @@ public class TransactionImportService
         char Separator,
         int ColumnCount,
         decimal LayoutConfidence,
+        List<RowData> ParsedRows,
         List<RowData> ValidRows,
         List<RowData> IgnoredRows
     );
