@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="Services/Config/**/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Config\Import\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

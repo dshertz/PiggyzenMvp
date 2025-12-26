@@ -49,7 +49,8 @@ public sealed class EffectiveImportConfigFactory
     private IReadOnlyList<ImportSection> LoadDefinitions()
     {
         var sections = new List<ImportSection>();
-        var configRoot = Path.Combine(_environment.ContentRootPath, "Services", "Config");
+        var repoRoot = Path.GetFullPath(Path.Combine(_environment.ContentRootPath, ".."));
+        var configRoot = Path.Combine(repoRoot, "Config", "Import");
         var defaultPath = Path.Combine(configRoot, "import.default.json");
         sections.Add(
             new ImportSection(
