@@ -37,6 +37,13 @@
         >
             @(isImporting ? "Importerar…" : "Importera med valt schema")
         </button>
+        <button
+            type="button"
+            class="btn btn-outline-danger ms-auto"
+            @onclick="ClearForm"
+        >
+            Rensa
+        </button>
     </div>
 </EditForm>
 
@@ -297,6 +304,7 @@
                 autoCategorizedCount = result?.AutoCategorizedCount ?? 0;
                 autoCategorizeErrors = result?.AutoCategorizeErrors ?? new();
                 importedAtUtc = result?.ImportedAtUtc;
+                ClearPreviewState();
             }
             else
             {
@@ -322,6 +330,17 @@
         autoCategorizeErrors = null;
         importedAtUtc = null;
         errorMessage = null;
+        ClearPreviewState();
+    }
+
+    private void ClearForm()
+    {
+        importRequest.RawText = string.Empty;
+        ResetImportedState();
+    }
+
+    private void ClearPreviewState()
+    {
         previewResult = null;
         columnFieldSelection.Clear();
         schemaDefinition = new TransactionImportSchemaDefinition();
