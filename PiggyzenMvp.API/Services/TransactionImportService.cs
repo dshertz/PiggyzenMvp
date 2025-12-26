@@ -544,15 +544,6 @@ public class TransactionImportService
                     }
                 }
 
-                var normalized = ImportNormalization.NormalizeText(cell);
-                foreach (var token in _importConfig.TypeIndicatorTokens)
-                {
-                    if (normalized.Contains(token))
-                    {
-                        metrics[columnIndex].TypeKeywordMatches++;
-                        break;
-                    }
-                }
             }
         }
 
@@ -625,30 +616,12 @@ public class TransactionImportService
             .Select(x => (int?)x.index)
             .FirstOrDefault();
 
-        var typeCandidate = metrics
-            .Select((metric, index) => new
-            {
-                index,
-                metric.TypeKeywordMatches,
-                AverageLength = metric.Samples == 0 ? 0 : metric.TotalLength / (double)metric.Samples
-            })
-            .Where(
-                x =>
-                    x.index != amountIdx
-                    && x.index != transactionDateIdx
-                    && x.index != descriptionIdx
-                    && x.TypeKeywordMatches > 0
-            )
-            .OrderByDescending(x => x.TypeKeywordMatches)
-            .ThenBy(x => x.AverageLength)
-            .FirstOrDefault();
-
         schema = new TransactionImportSchema(
             transactionDateIdx,
             descriptionIdx,
             amountIdx,
             bookingDateIdx,
-            typeCandidate?.index,
+            null,
             balanceIdx,
             expectedColumnCount
         );
@@ -663,11 +636,7 @@ public class TransactionImportService
 
         var baseConfidence = (dateConfidence + amountConfidence + descriptionConfidence) / 3m;
 
-        var typeConfidence = typeCandidate != null
-            ? Math.Min(1m, typeCandidate.TypeKeywordMatches / (decimal)sampleCountDecimal)
-            : 0m;
-
-        confidence = Math.Min(1m, baseConfidence + typeConfidence * 0.25m);
+        confidence = Math.Min(1m, baseConfidence);
 
         return true;
     }
@@ -961,19 +930,6 @@ public class TransactionImportService
         return null;
     }
 
-    private int? FindHeaderRowIndex(List<RowData> rows)
-    {
-        for (var i = 0; i < rows.Count; i++)
-        {
-            if (IsHeaderRowCandidate(rows[i]))
-            {
-                return i;
-            }
-        }
-
-        return null;
-    }
-
     private bool IsHeaderRowCandidate(RowData row)
     {
         if (row.Columns.Length == 0)
@@ -981,9 +937,16 @@ public class TransactionImportService
             return false;
         }
 
+        var matchCount = 0;
         foreach (var column in row.Columns)
         {
-            if (ContainsHeaderIndicator(column))
+            if (!IsHeaderAlias(column))
+            {
+                continue;
+            }
+
+            matchCount++;
+            if (matchCount >= 2)
             {
                 return true;
             }
@@ -992,7 +955,7 @@ public class TransactionImportService
         return false;
     }
 
-    private bool ContainsHeaderIndicator(string? input)
+    private bool IsHeaderAlias(string? input)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -1000,15 +963,7 @@ public class TransactionImportService
         }
 
         var normalized = ImportNormalization.NormalizeHeader(input);
-        foreach (var token in _importConfig.HeaderIndicatorTokens)
-        {
-            if (normalized.Contains(token))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return _importConfig.HeaderAliasesNormalized.ContainsKey(normalized);
     }
 
     private static string BuildColumnDisplayName(RowData? headerRow, int index)
@@ -1236,7 +1191,6 @@ public class TransactionImportService
         public int DateMatches;
         public int MoneyMatches;
         public int NegativeMoneyCount;
-        public int TypeKeywordMatches;
         public int TotalLength;
     }
 

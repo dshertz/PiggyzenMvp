@@ -110,8 +110,6 @@ public sealed class EffectiveImportConfigFactory
         var separators = new HashSet<char>();
         var dateFormats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var headerAliases = new Dictionary<string, HeaderField>(StringComparer.Ordinal);
-        var headerIndicatorTokens = new HashSet<string>(StringComparer.Ordinal);
-        var typeIndicatorTokens = new HashSet<string>(StringComparer.Ordinal);
         var keywordMapping = new Dictionary<string, TransactionKind>(StringComparer.Ordinal);
         var orderedKeywordEntries = new List<(TransactionKind Kind, string Keyword)>();
         var transforms = new ImportTransforms();
@@ -121,8 +119,6 @@ public sealed class EffectiveImportConfigFactory
             MergeSeparators(section.Profile, separators);
             MergeDateFormats(section.Profile, dateFormats);
             MergeHeaderAliases(section.Profile, section.SourceName, headerAliases);
-            MergeHeaderIndicatorTokens(section.Profile, headerIndicatorTokens);
-            MergeTypeIndicatorTokens(section.Profile, typeIndicatorTokens);
             MergeKindRules(section.Profile, section.SourceName, keywordMapping, orderedKeywordEntries);
             MergeTransforms(section.Profile, transforms);
         }
@@ -138,8 +134,6 @@ public sealed class EffectiveImportConfigFactory
             separators.ToList(),
             dateFormats.ToList(),
             headerAliases,
-            headerIndicatorTokens.ToList(),
-            typeIndicatorTokens.ToList(),
             kindRules,
             transforms);
     }
@@ -233,44 +227,6 @@ public sealed class EffectiveImportConfigFactory
             }
 
             headerAliases[normalizedKey] = field;
-        }
-    }
-
-    private void MergeHeaderIndicatorTokens(ImportProfile profile, HashSet<string> tokens)
-    {
-        if (profile.HeaderIndicatorTokens == null)
-        {
-            return;
-        }
-
-        foreach (var token in profile.HeaderIndicatorTokens)
-        {
-            var normalizedToken = ImportNormalization.NormalizeHeader(token);
-            if (string.IsNullOrWhiteSpace(normalizedToken))
-            {
-                continue;
-            }
-
-            tokens.Add(normalizedToken);
-        }
-    }
-
-    private void MergeTypeIndicatorTokens(ImportProfile profile, HashSet<string> tokens)
-    {
-        if (profile.TypeIndicatorTokens == null)
-        {
-            return;
-        }
-
-        foreach (var token in profile.TypeIndicatorTokens)
-        {
-            var normalizedToken = ImportNormalization.NormalizeText(token);
-            if (string.IsNullOrWhiteSpace(normalizedToken))
-            {
-                continue;
-            }
-
-            tokens.Add(normalizedToken);
         }
     }
 
@@ -377,82 +333,7 @@ public sealed class EffectiveImportConfigFactory
                 "dd/MM/yyyy",
                 "MM-dd-yyyy",
                 "MM/dd/yyyy",
-            },
-            HeaderAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["transaktionsdatum"] = "TransactionDate",
-                ["transactiondatum"] = "TransactionDate",
-                ["transactiondate"] = "TransactionDate",
-                ["bokforingsdatum"] = "BookingDate",
-                ["bookingdate"] = "BookingDate",
-                ["meddelande"] = "Description",
-                ["meddelandetext"] = "Description",
-                ["text"] = "Description",
-                ["textmeddelande"] = "Description",
-                ["beskrivning"] = "Description",
-                ["referens"] = "Description",
-                ["motpart"] = "Description",
-                ["transaktionstyp"] = "Type",
-                ["transactiontype"] = "Type",
-                ["typ"] = "Type",
-                ["type"] = "Type",
-                ["belopp"] = "Amount",
-                ["insattning"] = "Amount",
-                ["uttag"] = "Amount",
-                ["amount"] = "Amount",
-                ["insattninguttag"] = "Amount",
-                ["saldo"] = "Balance",
-                ["behallning"] = "Balance",
-                ["balans"] = "Balance",
-                ["balance"] = "Balance",
-            },
-            HeaderIndicatorTokens = new[]
-            {
-                "kontonummer",
-                "kontonamn",
-                "konto",
-                "saldo",
-                "tillgangligt",
-                "tillgangligtbelopp",
-                "bokforingsdatum",
-                "transaktionsdatum",
-                "transaktionstyp",
-                "transaktionstypen",
-                "meddelande",
-                "belopp",
-                "mottagare",
-            },
-            TypeIndicatorTokens = new[]
-            {
-                "swish",
-                "kort",
-                "card",
-                "autogiro",
-                "betal",
-                "avgift",
-                "overforing",
-                "transfer",
-                "insattning",
-                "kontant",
-                "deposit",
-                "loan",
-                "lan",
-                "amort",
-                "ranta",
-                "rabatt",
-            },
-            KindRules = new[]
-            {
-                new KindRuleDefinition { Kind = "CardPurchase", Keywords = new[] { "Kortköp" } },
-                new KindRuleDefinition { Kind = "Swish", Keywords = new[] { "Swish" } },
-                new KindRuleDefinition { Kind = "Payment", Keywords = new[] { "Betalning", "Autogiro" } },
-                new KindRuleDefinition { Kind = "Fee", Keywords = new[] { "Avg", "Årsavg" } },
-                new KindRuleDefinition { Kind = "Transfer", Keywords = new[] { "Överföring" } },
-                new KindRuleDefinition { Kind = "Deposit", Keywords = new[] { "Insättning", "Kontantinsättning" } },
-                new KindRuleDefinition { Kind = "LoanPayment", Keywords = new[] { "Låneinbetalning" } },
-                new KindRuleDefinition { Kind = "Interest", Keywords = new[] { "Ränta" } },
-                new KindRuleDefinition { Kind = "Adjustment", Keywords = new[] { "Rabatt" } },
-            },
+            }
         };
     }
 

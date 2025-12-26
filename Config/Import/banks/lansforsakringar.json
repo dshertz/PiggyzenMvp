@@ -1,47 +1,72 @@
 {
-    "dateFormats": ["yyyy-MM-dd"],
     "headerAliases": {
         "bokföringsdatum": "BookingDate",
-        "behållning": "Balance",
+        "transaktionsdatum": "TransactionDate",
+        "transaktionstyp": "Type",
+        "meddelande": "Description",
+        "text": "Description",
+        "belopp": "Amount",
         "insättning/uttag": "Amount",
+        "behållning": "Balance",
         "insättning": "Amount"
     },
     "kindRules": [
         {
             "kind": "CardPurchase",
-            "keywords": ["Kortköp"]
+            "keywords": [
+                "Kortköp"
+            ]
         },
         {
             "kind": "Transfer",
-            "keywords": ["Överföring"]
+            "keywords": [
+                "Överföring"
+            ]
         },
         {
             "kind": "Fee",
-            "keywords": ["Avg", "Årsavg"]
+            "keywords": [
+                "Avg",
+                "Årsavg"
+            ]
         },
         {
             "kind": "Payment",
-            "keywords": ["Betalning", "Autogiro"]
+            "keywords": [
+                "Betalning",
+                "Autogiro"
+            ]
         },
         {
             "kind": "Deposit",
-            "keywords": ["Kontantinsättning", "Insättning"]
+            "keywords": [
+                "Kontantinsättning",
+                "Insättning"
+            ]
         },
         {
             "kind": "Interest",
-            "keywords": ["Ränta"]
+            "keywords": [
+                "Ränta"
+            ]
         },
         {
             "kind": "Adjustment",
-            "keywords": ["Rabatt"]
+            "keywords": [
+                "Rabatt"
+            ]
         },
         {
             "kind": "LoanPayment",
-            "keywords": ["Låneinbetalning"]
+            "keywords": [
+                "Låneinbetalning"
+            ]
         },
         {
             "kind": "Swish",
-            "keywords": ["Swish"]
+            "keywords": [
+                "Swish"
+            ]
         }
     ],
     "transforms": {
