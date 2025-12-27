@@ -9,6 +9,13 @@ namespace PiggyzenMvp.API.Services.Imports.ColumnGuessing;
 public sealed class ColumnProfiler
 {
     private const int MaxSampleRows = 20;
+    private static readonly string[] MetadataRowPrefixes =
+    {
+        "kontoutdrag",
+        "kontonummer",
+        "kontonamn",
+        "saldo",
+    };
 
     private readonly ResolvedImportConfig _importConfig;
     private readonly DescriptionSignatureService _signatureService;
@@ -38,7 +45,10 @@ public sealed class ColumnProfiler
             throw new ArgumentOutOfRangeException(nameof(columnCount));
         }
 
-        var rowsForProfiling = sampleRows.Take(MaxSampleRows).ToList();
+        var rowsForProfiling = sampleRows
+            .Where(row => IsValidProfilingRow(row, columnCount))
+            .Take(MaxSampleRows)
+            .ToList();
         var builders = Enumerable.Range(0, columnCount)
             .Select(index => new ColumnProfileBuilder(index, _cardPurchaseDetection, _typeKeywords, _importConfig.DateFormats))
             .ToArray();
@@ -67,6 +77,32 @@ public sealed class ColumnProfiler
             .ToList();
 
         return new ColumnProfilingResult(profiles, rowsForProfiling);
+    }
+
+    private static bool IsValidProfilingRow(ImportSampleRow row, int columnCount)
+    {
+        if (row.Columns.Length != columnCount)
+        {
+            return false;
+        }
+
+        if (row.Columns.All(string.IsNullOrWhiteSpace))
+        {
+            return false;
+        }
+
+        return !IsMetadataRow(row.Columns[0]);
+    }
+
+    private static bool IsMetadataRow(string? cell)
+    {
+        if (string.IsNullOrWhiteSpace(cell))
+        {
+            return false;
+        }
+
+        var normalized = cell.Trim().ToLowerInvariant();
+        return MetadataRowPrefixes.Any(prefix => normalized.StartsWith(prefix, StringComparison.Ordinal));
     }
 
     private sealed class ColumnProfileBuilder

@@ -36,6 +36,27 @@ public class ImportColumnGuesserTests
     }
 
     [Fact]
+    public void GuessResolvesDatesForHeaderlessLfExport()
+    {
+        var guesser = CreateGuesser();
+        var inputRows = new[]
+        {
+            new[] { "2025-12-18", "2025-12-18", "Insättning", "PENSION KPA", "73,00" },
+            new[] { "2025-12-18", "2025-12-17", "Kortköp", "HOBBEX.SE,STOCKHOLM,SE", "-967,20" },
+            new[] { "2025-12-17", "2025-12-16", "Kortköp", "STJERNHOLM, ELL,Jonkoping,SE", "-600,00" },
+            new[] { "2025-12-17", "2025-12-17", "Överföring", "Daniel Hertz", "1 000,00" },
+            new[] { "2025-12-16", "2025-12-16", "Överföring", "Daniel Hertz", "1 000,00" },
+            new[] { "2025-12-15", "2025-12-15", "Swish till WALLEY", "MEDS", "-1 149,04" },
+        };
+
+        var rows = CreateRows(inputRows);
+        var map = guesser.Guess(rows, inputRows[0].Length);
+
+        Assert.Equal(0, map.BookingDateIndex);
+        Assert.Equal(1, map.TransactionDateIndex);
+    }
+
+    [Fact]
     public void GuessUsesLatestBookingColumn_WhenTwoDateColumnsExist()
     {
         var guesser = CreateGuesser();

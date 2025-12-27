@@ -639,25 +639,14 @@ public class TransactionImportService
             .ToList();
 
         var columnMap = _columnGuesser.Guess(snapshotRows, expectedColumnCount);
+        var mapErrors = ImportColumnMapValidator.Validate(columnMap);
+        if (mapErrors.Count > 0)
+        {
+            error = string.Join(" ", mapErrors);
+            return false;
+        }
+
         var transactionDateIndex = columnMap.TransactionDateIndex ?? columnMap.BookingDateIndex;
-
-        if (!transactionDateIndex.HasValue)
-        {
-            error = "Kunde inte avgöra vilket fält som är transaktionsdatum.";
-            return false;
-        }
-
-        if (!columnMap.DescriptionIndex.HasValue)
-        {
-            error = "Kunde inte avgöra vilken kolumn som innehåller transaktionstexten.";
-            return false;
-        }
-
-        if (!columnMap.AmountIndex.HasValue)
-        {
-            error = "Kunde inte avgöra vilken kolumn som innehåller belopp.";
-            return false;
-        }
 
         var bookingIndex = columnMap.BookingDateIndex ?? transactionDateIndex;
         schema = new TransactionImportSchema(

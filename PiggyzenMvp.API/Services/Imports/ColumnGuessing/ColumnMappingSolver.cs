@@ -8,6 +8,7 @@ public sealed class ColumnMappingSolver
 {
     private const decimal DuplicateThreshold = 0.95m;
     private const int MaxCandidatesPerRole = 4;
+    private const decimal DeterministicDateThreshold = 0.6m;
 
     public ImportColumnMap Solve(ColumnProfilingResult profiling)
     {
@@ -49,8 +50,31 @@ public sealed class ColumnMappingSolver
         var dateCandidates = BuildCandidatePool(activeProfiles, profile => profile.DateRate);
         var typeCandidates = BuildCandidatePool(activeProfiles, profile => typeScores[profile.Index]);
         var descriptionCandidates = BuildCandidatePool(activeProfiles, profile => descriptionScores[profile.Index]);
-        var amountCandidates = BuildCandidatePool(activeProfiles.Where(profile => profile.AmountRate > 0m), profile => amountScores[profile.Index]);
 
+        var amountProfiles = activeProfiles.Where(profile => profile.AmountRate > 0m).ToList();
+        var amountCandidatePool = BuildCandidatePool(amountProfiles, profile => amountScores[profile.Index]);
+        var amountResolution = ResolveAmounts(amountProfiles, hasNegatives);
+        var amountLoopCandidates = amountResolution != null
+            ? new List<ColumnProfile?> { amountResolution.Amount }
+            : amountCandidatePool;
+
+        var reservedForAmount = new HashSet<int>();
+        if (amountResolution != null)
+        {
+            reservedForAmount.Add(amountResolution.Amount.Index);
+            if (amountResolution.Balance?.Index is int balanceIndex)
+            {
+                reservedForAmount.Add(balanceIndex);
+            }
+        }
+
+        var dateResolutions = ResolveDeterministicDateResolutions(activeProfiles);
+        if (!dateResolutions.Any())
+        {
+            dateResolutions = BuildFallbackDateResolutions(dateCandidates);
+        }
+
+        var hasDeterministicBalance = amountResolution?.Balance != null;
         var bestMap = new ImportColumnMap(
             null,
             null,
@@ -66,117 +90,134 @@ public sealed class ColumnMappingSolver
             0m,
             redundantList);
 
-        foreach (var bookingCandidate in dateCandidates)
+        foreach (var dateResolution in dateResolutions)
         {
-            foreach (var transactionCandidate in dateCandidates)
+            var dateScore = dateResolution.Score;
+            var usedColumns = new HashSet<int>();
+            if (dateResolution.Booking?.Index is int bookingIndex)
             {
-                if (bookingCandidate == null && transactionCandidate == null)
+                usedColumns.Add(bookingIndex);
+            }
+
+            if (dateResolution.Transaction?.Index is int transactionIndex)
+            {
+                usedColumns.Add(transactionIndex);
+            }
+
+            foreach (var typeCandidate in typeCandidates)
+            {
+                var typeIndex = typeCandidate?.Index;
+                if (typeIndex.HasValue && (usedColumns.Contains(typeIndex.Value) || reservedForAmount.Contains(typeIndex.Value)))
                 {
                     continue;
                 }
 
-                var dateScore = ComputeDateScore(bookingCandidate, transactionCandidate);
-                var usedColumns = new HashSet<int>();
-
-                if (bookingCandidate?.Index is int bookingIndex)
+                var typeScore = typeCandidate == null ? 0m : typeScores[typeCandidate.Index];
+                var usedAfterType = new HashSet<int>(usedColumns);
+                if (typeIndex.HasValue)
                 {
-                    usedColumns.Add(bookingIndex);
+                    usedAfterType.Add(typeIndex.Value);
                 }
 
-                if (transactionCandidate?.Index is int transactionIndex
-                    && transactionCandidate.Index != bookingCandidate?.Index)
+                foreach (var descriptionCandidate in descriptionCandidates)
                 {
-                    usedColumns.Add(transactionIndex);
-                }
-
-                foreach (var typeCandidate in typeCandidates)
-                {
-                    var typeIndex = typeCandidate?.Index;
-                    if (typeIndex.HasValue && usedColumns.Contains(typeIndex.Value))
+                    if (typeCandidate != null && descriptionCandidate != null
+                        && typeCandidate.Index == descriptionCandidate.Index)
                     {
                         continue;
                     }
 
-                    var typeScore = typeCandidate == null ? 0m : typeScores[typeCandidate.Index];
-
-                    foreach (var descriptionCandidate in descriptionCandidates)
+                    var descriptionIndex = descriptionCandidate?.Index;
+                    if (descriptionIndex.HasValue
+                        && (usedAfterType.Contains(descriptionIndex.Value) || reservedForAmount.Contains(descriptionIndex.Value)))
                     {
-                        if (typeCandidate != null && descriptionCandidate != null
-                            && typeCandidate.Index == descriptionCandidate.Index)
+                        continue;
+                    }
+
+                    var descriptionScore = descriptionCandidate == null
+                        ? 0m
+                        : descriptionScores[descriptionCandidate.Index];
+
+                    var usedAfterText = new HashSet<int>(usedAfterType);
+                    if (descriptionIndex.HasValue)
+                    {
+                        usedAfterText.Add(descriptionIndex.Value);
+                    }
+
+                    foreach (var amountCandidate in amountLoopCandidates)
+                    {
+                        if (amountCandidate?.Index is int amountCandidateIndex && usedAfterText.Contains(amountCandidateIndex))
                         {
                             continue;
                         }
 
-                        if (descriptionCandidate?.Index is int descriptionIndex
-                            && usedColumns.Contains(descriptionIndex))
-                        {
-                            continue;
-                        }
-
-                        var descriptionScore = descriptionCandidate == null
+                        var amountScore = amountCandidate == null
                             ? 0m
-                            : descriptionScores[descriptionCandidate.Index];
+                            : amountScores.GetValueOrDefault(amountCandidate.Index);
 
-                        var usedAfterText = new HashSet<int>(usedColumns);
-                        if (typeIndex.HasValue)
+                        var usedAfterAmount = new HashSet<int>(usedAfterText);
+                        if (amountCandidate?.Index is int amountCandidateIdx)
                         {
-                            usedAfterText.Add(typeIndex.Value);
+                            usedAfterAmount.Add(amountCandidateIdx);
                         }
 
-                        if (descriptionCandidate?.Index is int descIdx)
+                        ColumnProfile? balanceCandidate;
+                        decimal balanceScore;
+
+                        if (hasDeterministicBalance)
                         {
-                            usedAfterText.Add(descIdx);
+                            balanceCandidate = amountResolution!.Balance;
+                            if (balanceCandidate?.Index is int balanceCandidateIndex && usedAfterAmount.Contains(balanceCandidateIndex))
+                            {
+                                balanceCandidate = null;
+                            }
+
+                            if (balanceCandidate?.Index is int balanceCandidateIdx)
+                            {
+                                usedAfterAmount.Add(balanceCandidateIdx);
+                            }
+
+                            balanceScore = balanceCandidate == null ? 0m : ComputeBalanceScore(balanceCandidate);
                         }
-
-                        foreach (var amountCandidate in amountCandidates)
+                        else
                         {
-                            if (amountCandidate?.Index is int amountIdx && usedAfterText.Contains(amountIdx))
-                            {
-                                continue;
-                            }
-
-                            var amountScore = amountCandidate == null
-                                ? 0m
-                                : amountScores.GetValueOrDefault(amountCandidate.Index);
-
-                            var usedAfterAmount = new HashSet<int>(usedAfterText);
-                            if (amountCandidate?.Index is int amtIdx)
-                            {
-                                usedAfterAmount.Add(amtIdx);
-                            }
-
-                            var balanceCandidate = SelectBalanceCandidate(
-                                amountCandidates,
+                            balanceCandidate = SelectBalanceCandidate(
+                                amountCandidatePool,
                                 usedAfterAmount,
                                 amountCandidate?.Index,
                                 amountScores);
 
-                            var balanceScore = balanceCandidate == null
+                            balanceScore = balanceCandidate == null
                                 ? 0m
                                 : ComputeBalanceScore(balanceCandidate);
 
-                            var totalScore = dateScore + typeScore + descriptionScore + amountScore + balanceScore;
-
-                            if (totalScore <= bestMap.TotalScore)
+                            if (balanceCandidate?.Index is int balanceCandidateIndex)
                             {
-                                continue;
+                                usedAfterAmount.Add(balanceCandidateIndex);
                             }
-
-                            bestMap = new ImportColumnMap(
-                                bookingCandidate?.Index,
-                                transactionCandidate?.Index,
-                                typeCandidate?.Index,
-                                descriptionCandidate?.Index,
-                                amountCandidate?.Index,
-                                balanceCandidate?.Index,
-                                totalScore,
-                                dateScore,
-                                typeScore,
-                                descriptionScore,
-                                amountScore,
-                                balanceScore,
-                                redundantList);
                         }
+
+                        var totalScore = dateScore + typeScore + descriptionScore + amountScore + balanceScore;
+
+                        if (totalScore <= bestMap.TotalScore)
+                        {
+                            continue;
+                        }
+
+                        bestMap = new ImportColumnMap(
+                            dateResolution.Booking?.Index,
+                            dateResolution.Transaction?.Index,
+                            typeCandidate?.Index,
+                            descriptionCandidate?.Index,
+                            amountCandidate?.Index,
+                            balanceCandidate?.Index,
+                            totalScore,
+                            dateScore,
+                            typeScore,
+                            descriptionScore,
+                            amountScore,
+                            balanceScore,
+                            redundantList);
                     }
                 }
             }
@@ -375,4 +416,244 @@ public sealed class ColumnMappingSolver
 
         return best;
     }
+
+    private static IReadOnlyList<DateResolution> ResolveDeterministicDateResolutions(
+        IReadOnlyList<ColumnProfile> profiles)
+    {
+        var dateProfiles = profiles
+            .Where(profile => profile.DateRate >= DeterministicDateThreshold)
+            .OrderByDescending(profile => profile.DateRate)
+            .ToList();
+
+        if (dateProfiles.Count < 2)
+        {
+            return Array.Empty<DateResolution>();
+        }
+
+        DateResolution? best = null;
+        foreach (var left in dateProfiles)
+        {
+            foreach (var right in dateProfiles)
+            {
+                if (left.Index == right.Index)
+                {
+                    continue;
+                }
+
+                var resolution = EvaluateDatePair(left, right);
+                if (best == null || resolution.Score > best.Score)
+                {
+                    best = resolution;
+                }
+            }
+        }
+
+        return best == null ? Array.Empty<DateResolution>() : new[] { best };
+    }
+
+    private static DateResolution EvaluateDatePair(
+        ColumnProfile left,
+        ColumnProfile right)
+    {
+        var leftRatio = ComputeDateOrderingRatio(left, right);
+        var rightRatio = ComputeDateOrderingRatio(right, left);
+        var leftScore = ComputeDateScore(left, right);
+        var rightScore = ComputeDateScore(right, left);
+
+        ColumnProfile bookingProfile;
+        ColumnProfile transactionProfile;
+        decimal score;
+
+        if (leftRatio > rightRatio || (leftRatio == rightRatio && leftScore >= rightScore))
+        {
+            bookingProfile = left;
+            transactionProfile = right;
+            score = leftScore;
+        }
+        else
+        {
+            bookingProfile = right;
+            transactionProfile = left;
+            score = rightScore;
+        }
+
+        if (AreDateColumnsIdentical(left, right))
+        {
+            return new DateResolution(left, left, score);
+        }
+
+        return new DateResolution(bookingProfile, transactionProfile, score);
+    }
+
+    private static decimal ComputeDateOrderingRatio(
+        ColumnProfile bookingProfile,
+        ColumnProfile transactionProfile)
+    {
+        var sampleCount = Math.Min(bookingProfile.DateSamples.Count, transactionProfile.DateSamples.Count);
+        if (sampleCount == 0)
+        {
+            return 1m;
+        }
+
+        var validPairs = 0;
+        var satisfying = 0;
+
+        for (var index = 0; index < sampleCount; index++)
+        {
+            var bookingValue = bookingProfile.DateSamples[index];
+            var transactionValue = transactionProfile.DateSamples[index];
+            if (!bookingValue.HasValue || !transactionValue.HasValue)
+            {
+                continue;
+            }
+
+            validPairs++;
+            if (bookingValue.Value >= transactionValue.Value)
+            {
+                satisfying++;
+            }
+        }
+
+        return validPairs == 0 ? 1m : satisfying / (decimal)validPairs;
+    }
+
+    private static bool AreDateColumnsIdentical(ColumnProfile left, ColumnProfile right)
+    {
+        if (left.DateSamples.Count != right.DateSamples.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < left.DateSamples.Count; index++)
+        {
+            var leftValue = left.DateSamples[index];
+            var rightValue = right.DateSamples[index];
+            if (leftValue.HasValue != rightValue.HasValue)
+            {
+                return false;
+            }
+
+            if (leftValue.HasValue && leftValue.Value != rightValue.Value)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static IReadOnlyList<DateResolution> BuildFallbackDateResolutions(
+        IReadOnlyList<ColumnProfile?> candidates)
+    {
+        var resolutions = new List<DateResolution>();
+        foreach (var booking in candidates)
+        {
+            foreach (var transaction in candidates)
+            {
+                if (booking == null && transaction == null)
+                {
+                    continue;
+                }
+
+                var score = ComputeDateScore(booking, transaction);
+                resolutions.Add(new DateResolution(booking, transaction, score));
+            }
+        }
+
+        if (!resolutions.Any())
+        {
+            resolutions.Add(new DateResolution(null, null, 0m));
+        }
+
+        return resolutions;
+    }
+
+    private static AmountResolution? ResolveAmounts(
+        IReadOnlyList<ColumnProfile> amountProfiles,
+        bool hasNegatives)
+    {
+        var unique = RemoveDuplicateAmountProfiles(amountProfiles);
+        if (unique.Count == 0)
+        {
+            return null;
+        }
+
+        if (unique.Count == 1)
+        {
+            return new AmountResolution(unique[0], null);
+        }
+
+        if (hasNegatives)
+        {
+            var amountProfile = unique
+                .OrderByDescending(profile => profile.SignMixRate)
+                .ThenBy(profile => profile.MedianAbs)
+                .ThenByDescending(profile => profile.AmountRate)
+                .First();
+
+            var balanceProfile = unique
+                .Where(profile => profile.Index != amountProfile.Index)
+                .OrderByDescending(profile => profile.MostlyPositiveRate)
+                .ThenByDescending(profile => profile.Median)
+                .ThenByDescending(profile => profile.AmountRate)
+                .FirstOrDefault();
+
+            return new AmountResolution(amountProfile, balanceProfile);
+        }
+
+        var sorted = unique.OrderBy(profile => profile.Median).ToList();
+        var amountCandidate = sorted.First();
+        var balanceCandidate = sorted.Last();
+        if (amountCandidate.Index == balanceCandidate.Index)
+        {
+            return new AmountResolution(amountCandidate, null);
+        }
+
+        return new AmountResolution(amountCandidate, balanceCandidate);
+    }
+
+    private static List<ColumnProfile> RemoveDuplicateAmountProfiles(IReadOnlyList<ColumnProfile> profiles)
+    {
+        var results = new List<ColumnProfile>();
+        foreach (var profile in profiles)
+        {
+            if (results.Any(existing => AreAmountSamplesIdentical(existing, profile)))
+            {
+                continue;
+            }
+
+            results.Add(profile);
+        }
+
+        return results;
+    }
+
+    private static bool AreAmountSamplesIdentical(ColumnProfile left, ColumnProfile right)
+    {
+        if (left.AmountSamples.Count != right.AmountSamples.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < left.AmountSamples.Count; index++)
+        {
+            var leftValue = left.AmountSamples[index];
+            var rightValue = right.AmountSamples[index];
+            if (leftValue.HasValue != rightValue.HasValue)
+            {
+                return false;
+            }
+
+            if (leftValue.HasValue && leftValue.Value != rightValue.Value)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private sealed record DateResolution(ColumnProfile? Booking, ColumnProfile? Transaction, decimal Score);
+
+    private sealed record AmountResolution(ColumnProfile Amount, ColumnProfile? Balance);
 }
