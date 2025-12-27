@@ -4,6 +4,8 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using PiggyzenMvp.API.DTOs;
+using PiggyzenMvp.API.Services.Imports;
+using PiggyzenMvp.API.Services.Imports.ColumnGuessing;
 using ResolvedImportConfig = PiggyzenMvp.API.Services.Imports.ImportConfigService.ResolvedImportConfig;
 
 namespace PiggyzenMvp.API.Services;
@@ -16,12 +18,17 @@ public class TransactionImportService
     private readonly NormalizeService _normalizeService;
     private readonly ResolvedImportConfig _importConfig;
     private readonly string[] _dateFormats;
+    private readonly ImportColumnGuesser _columnGuesser;
 
-    public TransactionImportService(NormalizeService normalizeService, ResolvedImportConfig importConfig)
+    public TransactionImportService(
+        NormalizeService normalizeService,
+        ResolvedImportConfig importConfig,
+        ImportColumnGuesser columnGuesser)
     {
         _normalizeService = normalizeService;
         _importConfig = importConfig;
         _dateFormats = importConfig.DateFormats.ToArray();
+        _columnGuesser = columnGuesser;
     }
 
     public TransactionImportPreviewResult PreparePreview(string rawText, int previewRowCount = 5)
@@ -627,131 +634,43 @@ public class TransactionImportService
             return false;
         }
 
-        var metrics = Enumerable.Range(0, expectedColumnCount)
-            .Select(_ => new ColumnMetrics())
-            .ToArray();
-
-        foreach (var row in sampleRows)
-        {
-            for (var columnIndex = 0; columnIndex < expectedColumnCount; columnIndex++)
-            {
-                if (columnIndex >= row.Columns.Length)
-                {
-                    continue;
-                }
-
-                var cell = row.Columns[columnIndex];
-                metrics[columnIndex].Samples++;
-                metrics[columnIndex].TotalLength += cell.Length;
-
-                if (TryParseDate(cell, out _))
-                {
-                    metrics[columnIndex].DateMatches++;
-                }
-
-                if (TryParseAmount(cell, out var amount))
-                {
-                    metrics[columnIndex].MoneyMatches++;
-                    if (amount < 0)
-                    {
-                        metrics[columnIndex].NegativeMoneyCount++;
-                    }
-                }
-
-            }
-        }
-
-        var sampleCount = sampleRows.Count;
-        var minDateMatches = Math.Max(1, sampleCount / 4);
-
-        var dateCandidate = metrics
-            .Select((metric, index) => new { metric.DateMatches, index })
-            .Where(x => x.DateMatches >= minDateMatches)
-            .OrderByDescending(x => x.DateMatches)
-            .FirstOrDefault();
-
-        if (dateCandidate == null)
-        {
-            error = "Kunde inte avgöra vilken kolumn som innehåller transaktionsdatum.";
-            return false;
-        }
-
-        var transactionDateIdx = dateCandidate.index;
-
-        var moneyCandidates = metrics
-            .Select((metric, index) => new
-            {
-                index,
-                metric.MoneyMatches,
-                metric.NegativeMoneyCount
-            })
-            .Where(x => x.MoneyMatches > 0)
-            .OrderByDescending(x => x.NegativeMoneyCount)
-            .ThenByDescending(x => x.MoneyMatches)
+        var snapshotRows = sampleRows
+            .Select(row => new ImportSampleRow(row.LineNumber, row.Columns))
             .ToList();
 
-        if (!moneyCandidates.Any())
+        var columnMap = _columnGuesser.Guess(snapshotRows, expectedColumnCount);
+        var transactionDateIndex = columnMap.TransactionDateIndex ?? columnMap.BookingDateIndex;
+
+        if (!transactionDateIndex.HasValue)
         {
-            error = "Kunde inte avgöra vilken kolumn som innehåller belopp.";
+            error = "Kunde inte avgöra vilket fält som är transaktionsdatum.";
             return false;
         }
 
-        var amountIdx = moneyCandidates.First().index;
-        int? balanceIdx = moneyCandidates
-            .Where(c => c.index != amountIdx)
-            .OrderBy(c => c.NegativeMoneyCount)
-            .ThenByDescending(c => c.MoneyMatches)
-            .Select(c => (int?)c.index)
-            .FirstOrDefault();
-
-        var descriptionCandidate = metrics
-            .Select((metric, index) => new
-            {
-                index,
-                Score = ComputeTextScore(metric),
-                AverageLength = metric.Samples == 0 ? 0 : metric.TotalLength / (double)metric.Samples,
-            })
-            .Where(x => x.index != transactionDateIdx && x.index != amountIdx)
-            .OrderByDescending(x => x.Score)
-            .FirstOrDefault();
-
-        if (descriptionCandidate == null || descriptionCandidate.Score <= 0 || descriptionCandidate.AverageLength < 3)
+        if (!columnMap.DescriptionIndex.HasValue)
         {
             error = "Kunde inte avgöra vilken kolumn som innehåller transaktionstexten.";
             return false;
         }
 
-        var descriptionIdx = descriptionCandidate.index;
+        if (!columnMap.AmountIndex.HasValue)
+        {
+            error = "Kunde inte avgöra vilken kolumn som innehåller belopp.";
+            return false;
+        }
 
-        var bookingDateIdx = metrics
-            .Select((metric, index) => new { metric.DateMatches, index })
-            .Where(x => x.index != transactionDateIdx && x.DateMatches > 0)
-            .OrderByDescending(x => x.DateMatches)
-            .Select(x => (int?)x.index)
-            .FirstOrDefault();
-
+        var bookingIndex = columnMap.BookingDateIndex ?? transactionDateIndex;
         schema = new TransactionImportSchema(
-            transactionDateIdx,
-            descriptionIdx,
-            amountIdx,
-            bookingDateIdx,
-            null,
-            balanceIdx,
+            transactionDateIndex.Value,
+            columnMap.DescriptionIndex.Value,
+            columnMap.AmountIndex.Value,
+            bookingIndex,
+            columnMap.TransactionTypeIndex,
+            columnMap.BalanceIndex,
             expectedColumnCount
         );
 
-        var sampleCountDecimal = Math.Max(1, sampleCount);
-        var dateConfidence = Math.Min(1m, dateCandidate.DateMatches / (decimal)sampleCountDecimal);
-        var amountConfidence = Math.Min(1m, metrics[amountIdx].MoneyMatches / (decimal)sampleCountDecimal);
-        var descriptionConfidence = Math.Min(
-            1m,
-            (decimal)Math.Min(1.0, descriptionCandidate.Score / 30.0)
-        );
-
-        var baseConfidence = (dateConfidence + amountConfidence + descriptionConfidence) / 3m;
-
-        confidence = Math.Min(1m, baseConfidence);
-
+        confidence = Math.Min(1m, columnMap.TotalScore / 5m);
         return true;
     }
 
@@ -1132,22 +1051,6 @@ public class TransactionImportService
         return TransactionImportFieldType.Unknown;
     }
 
-    private static double ComputeTextScore(ColumnMetrics metric)
-    {
-        if (metric.Samples == 0)
-        {
-            return 0;
-        }
-
-        var averageLength = metric.TotalLength / (double)metric.Samples;
-        var dateFraction = Math.Min(1.0, (double)metric.DateMatches / metric.Samples);
-        var moneyFraction = Math.Min(1.0, (double)metric.MoneyMatches / metric.Samples);
-        var nonDate = 1.0 - dateFraction;
-        var nonMoney = 1.0 - moneyFraction;
-
-        return averageLength * nonDate * nonMoney;
-    }
-
     private bool TryValidateBasic(RowData row, TransactionImportSchema schema, out string reason)
     {
         reason = string.Empty;
@@ -1210,56 +1113,12 @@ public class TransactionImportService
 
     private bool TryParseDate(string input, out DateTime? date)
     {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            date = null;
-            return false;
-        }
-
-        var trimmed = input.Trim();
-
-        var parsed = DateTime.TryParseExact(
-            trimmed,
-            _dateFormats,
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.None,
-            out var parsedDate
-        );
-
-        if (parsed)
-        {
-            date = parsedDate;
-            return true;
-        }
-
-        date = null;
-        return false;
+        return ImportValueParser.TryParseDate(input, _dateFormats, out date);
     }
 
     private static bool TryParseAmount(string input, out decimal? amount)
     {
-        amount = null;
-
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            return false;
-        }
-
-        var cleaned = new string(input.Where(c => !char.IsWhiteSpace(c)).ToArray());
-        var normalized = cleaned.Replace(",", ".");
-
-        if (decimal.TryParse(
-            normalized,
-            NumberStyles.Number,
-            CultureInfo.InvariantCulture,
-            out var parsed
-        ))
-        {
-            amount = parsed;
-            return true;
-        }
-
-        return false;
+        return ImportValueParser.TryParseAmount(input, out amount);
     }
 
     private sealed record InputRow(string Text, int LineNumber);
@@ -1306,14 +1165,5 @@ public class TransactionImportService
     );
 
     private sealed record LayoutCandidate(char Separator, int ColumnCount, int Score);
-
-    private sealed class ColumnMetrics
-    {
-        public int Samples;
-        public int DateMatches;
-        public int MoneyMatches;
-        public int NegativeMoneyCount;
-        public int TotalLength;
-    }
 
 }

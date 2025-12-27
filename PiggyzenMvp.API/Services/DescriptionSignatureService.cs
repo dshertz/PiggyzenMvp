@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using PiggyzenMvp.API.Data;
@@ -35,6 +36,27 @@ public class DescriptionSignatureService
     }
 
     public decimal GetAutoConfidenceThreshold() => AutoConfidenceThreshold;
+
+    public IReadOnlySet<string> GetMatchingNormalizedDescriptions(IEnumerable<string> normalizedValues)
+    {
+        var candidates = normalizedValues
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (candidates.Length == 0)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        var matches = _context.DescriptionSignatures
+            .Where(signature => signature.NormalizedDescription != null && candidates.Contains(signature.NormalizedDescription))
+            .Select(signature => signature.NormalizedDescription!)
+            .Distinct()
+            .ToList();
+
+        return new HashSet<string>(matches, StringComparer.Ordinal);
+    }
 
     public async Task<DescriptionSignature> GetOrCreateAsync(
         string? normalizedDescription,
