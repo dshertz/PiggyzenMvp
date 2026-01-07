@@ -1,6 +1,0 @@
-Steg,Syfte,Kommentar
-1. Normalisera,Säkerställ enhetligt format,"Line endings (\n), whitespace, decimalkomma"
-2. Dela i rader,Skapa tydlig struktur för loop,Split('\n') efter normalisering
-3. Försök strukturell parsing,Om formatet är välkänt (t.ex. tabb/csv),"Split på separator, kolumnanalys, typkontroll"
-4. Om misslyckas: kör regex,Fånga semistrukturerad eller PDF-klistrad text,Regex = flexibel fallback
-5. Validera/rapportera,Ogiltiga rader → preview med felorsak,T.ex. “raden kunde inte tolkas – okänt format”
