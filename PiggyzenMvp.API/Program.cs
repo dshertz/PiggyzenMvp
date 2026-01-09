@@ -5,16 +5,24 @@ using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi.Models;
 using PiggyzenMvp.API.Data;
 using PiggyzenMvp.API.Services;
+using PiggyzenMvp.API.Services.Imports;
+using PiggyzenMvp.API.Services.Imports.ColumnGuessing;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddScoped<NormalizeService>();
 builder.Services.AddScoped<DescriptionSignatureService>();
+builder.Services.AddScoped<CardPurchaseDetectionService>();
+builder.Services.AddScoped<ColumnProfiler>();
+builder.Services.AddScoped<ColumnMappingSolver>();
+builder.Services.AddScoped<ImportColumnGuesser>();
 builder.Services.AddScoped<TransactionImportService>();
 builder.Services.AddScoped<CategorizationService>();
 builder.Services.AddScoped<CategorySlugService>();
 builder.Services.AddScoped<CategorySeeder>();
+builder.Services.AddSingleton<ImportConfigService>();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<ImportConfigService>().GetAsync(null).GetAwaiter().GetResult());
 builder.Services.AddSingleton<TransactionKindMapper>();
 builder.Services.AddDbContext<PiggyzenMvpContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Sqlite"))

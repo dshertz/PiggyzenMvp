@@ -1,18 +1,130 @@
 @page "/import"
+@using System
+@using Microsoft.AspNetCore.Components
+@using System.Linq
+@using System.Net.Http.Json
 @using System.Text
 @inject IHttpClientFactory HttpClientFactory
 @rendermode InteractiveServer
 
 <h1>Importera transaktioner</h1>
 
-<EditForm Model="@importRequest" OnValidSubmit="ImportTransactions">
+<EditForm Model="@importRequest">
     <div class="mb-3">
         <label for="rawText">Klistra in transaktionstext</label>
-        <InputTextArea id="rawText" class="form-control" @bind-Value="importRequest.RawText" rows="10" />
+        <InputTextArea
+            id="rawText"
+            class="form-control"
+            @bind-Value="importRequest.RawText"
+            rows="10"
+        />
     </div>
 
-    <button type="submit" class="btn btn-primary mt-2">Import</button>
+    <div class="d-flex gap-2">
+        <button
+            type="button"
+            class="btn btn-outline-secondary"
+            @onclick="PreviewImportAsync"
+            disabled="@isPreviewing"
+        >
+            @(isPreviewing ? "Förhandsgranskar…" : "Visa förhandsgranskning")
+        </button>
+        <button
+            type="button"
+            class="btn btn-primary"
+            @onclick="ImportTransactions"
+            disabled="@(!CanImport || isImporting)"
+        >
+            @(isImporting ? "Importerar…" : "Importera med valt schema")
+        </button>
+        <button
+            type="button"
+            class="btn btn-outline-danger ms-auto"
+            @onclick="ClearForm"
+        >
+            Rensa
+        </button>
+    </div>
 </EditForm>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger mt-4" style="white-space: pre-wrap;">
+        <strong>❌ Ett oväntat fel inträffade:</strong>
+        <br />@errorMessage
+    </div>
+}
+
+@if (previewResult != null)
+{
+    <div class="mt-4">
+        <h2>Förhandsgranskning</h2>
+        <p>
+            Separator: <strong>@previewResult.Separator</strong> · Kolumnantal:
+            <strong>@previewResult.ColumnCount</strong>
+        </p>
+
+        @if (previewResult.ParsingErrors.Any())
+        {
+            <div class="alert alert-warning" style="white-space: pre-wrap;">
+                <strong>⚠️ Det finns fel i importen:</strong>
+                <ul>
+                    @foreach (var error in previewResult.ParsingErrors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mt-2">
+                <thead>
+                    <tr>
+                        <th class="align-middle">Rad</th>
+                        @foreach (var column in previewResult.Columns)
+                        {
+                     <th>
+                         <select
+                                    class="form-select form-select-sm"
+                                    @onchange="e => OnColumnFieldChanged(column.Index, e)"
+                                    value="@GetColumnFieldSelection(column.Index).ToString()"
+                                >
+                                    @foreach (var option in previewResult.FieldOptions)
+                                    {
+                                        <option value="@option.FieldType">
+                                     @option.DisplayName
+                                 </option>
+                             }
+                         </select>
+                     </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in previewResult.Rows)
+                    {
+                        <tr class="@GetPreviewRowClass(row)">
+                            <td>
+                                @row.LineNumber
+                                @if (!string.IsNullOrWhiteSpace(row.IgnoredReason))
+                                {
+                                    <div class="small @GetPreviewReasonClass(row)">@row.IgnoredReason</div>
+                                }
+                            </td>
+                            @foreach (var column in previewResult.Columns)
+                            {
+                                var cellValue = row.Columns.ElementAtOrDefault(column.Index) ?? string.Empty;
+                                <td>@cellValue</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+}
 
 @if (parsingErrors?.Any() == true)
 {
@@ -81,30 +193,28 @@
             </tr>
         </thead>
         <tbody>
-        @foreach (var tx in parsedTransactions)
-        {
-            <tr>
-                <td>@tx.BookingDate?.ToShortDateString()</td>
-                <td>@tx.TransactionDate.ToShortDateString()</td>
-                <td>@tx.Description</td>
-                <td>@tx.Amount.ToString("F2")</td>
-                <td>@(tx.Balance?.ToString("F2") ?? "")</td>
-            </tr>
-        }
+            @foreach (var tx in parsedTransactions)
+            {
+                <tr>
+                    <td>@tx.BookingDate?.ToShortDateString()</td>
+                    <td>@tx.TransactionDate.ToShortDateString()</td>
+                    <td>@tx.Description</td>
+                    <td>@tx.Amount.ToString("F2")</td>
+                    <td>@(tx.Balance?.ToString("F2") ?? "")</td>
+                </tr>
+            }
         </tbody>
     </table>
 }
 
-@if (!string.IsNullOrWhiteSpace(errorMessage))
-{
-    <div class="alert alert-danger mt-4" style="white-space: pre-wrap;">
-        <strong>❌ Ett oväntat fel inträffade:</strong>
-        <br />@errorMessage
-    </div>
-}
-
 @code {
     private TransactionImportRequest importRequest = new();
+    private TransactionImportPreviewResult? previewResult;
+    private List<TransactionImportFieldType> columnFieldSelection = new();
+    private TransactionImportSchemaDefinition schemaDefinition = new();
+    private bool isPreviewing;
+    private bool isImporting;
+
     private List<TransactionImportDto>? parsedTransactions;
     private List<string>? parsingErrors;
     private List<string>? duplicateWarnings;
@@ -113,15 +223,15 @@
     private DateTime? importedAtUtc;
     private string? errorMessage;
 
-    private async Task ImportTransactions()
+    private bool CanImport =>
+        previewResult != null
+        && previewResult.Columns.Any()
+        && HasRequiredFieldsSelected()
+        && !isImporting;
+
+    private async Task PreviewImportAsync()
     {
-        errorMessage = null;
-        parsedTransactions = null;
-        parsingErrors = null;
-        duplicateWarnings = null;
-        autoCategorizedCount = 0;
-        autoCategorizeErrors = null;
-        importedAtUtc = null;
+        ResetImportedState();
 
         if (string.IsNullOrWhiteSpace(importRequest.RawText))
         {
@@ -129,12 +239,61 @@
             return;
         }
 
+        isPreviewing = true;
+
         try
         {
             var client = HttpClientFactory.CreateClient("ApiClient");
             var content = new StringContent(importRequest.RawText, Encoding.UTF8, "text/plain");
+            var response = await client.PostAsync("api/transactions/import/preview", content);
 
-            var response = await client.PostAsync("api/transactions/import", content);
+            if (response.IsSuccessStatusCode)
+            {
+                previewResult = await response.Content.ReadFromJsonAsync<TransactionImportPreviewResult>();
+                columnFieldSelection = previewResult?.Columns
+                    .Select(column => column.SuggestedField)
+                    .ToList() ?? new List<TransactionImportFieldType>();
+                UpdateSchemaDefinitionFromSelection();
+            }
+            else
+            {
+                await PopulateErrorFromResponse(response);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isPreviewing = false;
+        }
+    }
+
+    private async Task ImportTransactions()
+    {
+        errorMessage = null;
+
+        if (previewResult == null)
+        {
+            errorMessage = "Starta med förhandsgranskning innan du importerar.";
+            return;
+        }
+
+        isImporting = true;
+
+        try
+        {
+            UpdateSchemaDefinitionFromSelection();
+
+            var client = HttpClientFactory.CreateClient("ApiClient");
+            var request = new TransactionImportWithSchemaRequest
+            {
+                RawText = importRequest.RawText,
+                Schema = schemaDefinition,
+            };
+
+            var response = await client.PostAsJsonAsync("api/transactions/import/schema", request);
 
             if (response.IsSuccessStatusCode)
             {
@@ -145,29 +304,274 @@
                 autoCategorizedCount = result?.AutoCategorizedCount ?? 0;
                 autoCategorizeErrors = result?.AutoCategorizeErrors ?? new();
                 importedAtUtc = result?.ImportedAtUtc;
+                ClearPreviewState();
             }
             else
             {
-                var status = (int)response.StatusCode;
-                var reason = response.ReasonPhrase;
-                var contentType = response.Content.Headers.ContentType?.ToString();
-                var responseText = await response.Content.ReadAsStringAsync();
-
-                errorMessage =
-                    $"Status: {status} ({reason})\n" +
-                    $"Content-Type: {contentType}\n" +
-                    $"Svar:\n{responseText}";
+                await PopulateErrorFromResponse(response);
             }
         }
         catch (Exception ex)
         {
             errorMessage = ex.Message;
         }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private void ResetImportedState()
+    {
+        parsedTransactions = null;
+        parsingErrors = null;
+        duplicateWarnings = null;
+        autoCategorizedCount = 0;
+        autoCategorizeErrors = null;
+        importedAtUtc = null;
+        errorMessage = null;
+        ClearPreviewState();
+    }
+
+    private void ClearForm()
+    {
+        importRequest.RawText = string.Empty;
+        ResetImportedState();
+    }
+
+    private void ClearPreviewState()
+    {
+        previewResult = null;
+        columnFieldSelection.Clear();
+        schemaDefinition = new TransactionImportSchemaDefinition();
+    }
+
+    private async Task PopulateErrorFromResponse(HttpResponseMessage response)
+    {
+        var status = (int)response.StatusCode;
+        var reason = response.ReasonPhrase;
+        var contentType = response.Content.Headers.ContentType?.ToString();
+        var responseText = await response.Content.ReadAsStringAsync();
+
+        errorMessage =
+            $"Status: {status} ({reason})\n" +
+            $"Content-Type: {contentType}\n" +
+            $"Svar:\n{responseText}";
+    }
+
+    private void OnColumnFieldChanged(int columnIndex, ChangeEventArgs? args)
+    {
+        if (args == null)
+        {
+            return;
+        }
+
+        var value = args.Value?.ToString();
+        if (Enum.TryParse<TransactionImportFieldType>(value, out var fieldType))
+        {
+            SetColumnField(columnIndex, fieldType);
+        }
+        else
+        {
+            SetColumnField(columnIndex, TransactionImportFieldType.Unknown);
+        }
+    }
+
+    private void SetColumnField(int columnIndex, TransactionImportFieldType fieldType)
+    {
+        if (previewResult == null || columnIndex < 0)
+        {
+            return;
+        }
+
+        while (columnFieldSelection.Count <= columnIndex)
+        {
+            columnFieldSelection.Add(TransactionImportFieldType.Unknown);
+        }
+
+        columnFieldSelection[columnIndex] = fieldType;
+        UpdateSchemaDefinitionFromSelection();
+    }
+
+    private void UpdateSchemaDefinitionFromSelection()
+    {
+        if (previewResult == null)
+        {
+            schemaDefinition = new TransactionImportSchemaDefinition();
+            return;
+        }
+
+        schemaDefinition = new TransactionImportSchemaDefinition
+        {
+            ColumnCount = previewResult.ColumnCount,
+            TransactionDateIndex = GetRequiredColumnIndex(TransactionImportFieldType.TransactionDate, 0),
+            DescriptionIndex = GetRequiredColumnIndex(TransactionImportFieldType.Description, 1),
+            AmountIndex = GetRequiredColumnIndex(TransactionImportFieldType.Amount, 2),
+            BookingDateIndex = GetColumnIndexOrNull(TransactionImportFieldType.BookingDate),
+            TransactionKindIndex = GetColumnIndexOrNull(TransactionImportFieldType.TransactionType),
+            BalanceIndex = GetColumnIndexOrNull(TransactionImportFieldType.Balance),
+        };
+    }
+
+    private int? GetColumnIndexOrNull(TransactionImportFieldType fieldType)
+    {
+        if (previewResult == null)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < columnFieldSelection.Count && i < previewResult.Columns.Count; i++)
+        {
+            if (columnFieldSelection[i] == fieldType)
+            {
+                return previewResult.Columns[i].Index;
+            }
+        }
+
+        return null;
+    }
+
+    private int GetRequiredColumnIndex(TransactionImportFieldType fieldType, int fallbackIndex)
+    {
+        return GetColumnIndexOrNull(fieldType) ?? AdjustFallbackIndex(fallbackIndex);
+    }
+
+    private int AdjustFallbackIndex(int fallbackIndex)
+    {
+        if (previewResult == null || previewResult.ColumnCount == 0)
+        {
+            return 0;
+        }
+
+        if (fallbackIndex < 0)
+        {
+            return 0;
+        }
+
+        return Math.Min(previewResult.ColumnCount - 1, fallbackIndex);
+    }
+
+    private TransactionImportFieldType GetColumnFieldSelection(int columnIndex)
+    {
+        if (columnIndex >= 0 && columnIndex < columnFieldSelection.Count)
+        {
+            return columnFieldSelection[columnIndex];
+        }
+
+        return TransactionImportFieldType.Unknown;
+    }
+
+    private bool HasRequiredFieldsSelected()
+    {
+        return GetColumnIndexOrNull(TransactionImportFieldType.TransactionDate) != null
+            && GetColumnIndexOrNull(TransactionImportFieldType.Description) != null
+            && GetColumnIndexOrNull(TransactionImportFieldType.Amount) != null;
+    }
+
+    private string GetPreviewRowClass(TransactionImportPreviewRow row)
+    {
+        return row.Status switch
+        {
+            TransactionImportPreviewRowStatus.Header => "table-secondary text-muted",
+            TransactionImportPreviewRowStatus.NonData => "table-secondary text-muted",
+            TransactionImportPreviewRowStatus.InvalidColumnCount => "table-warning",
+            TransactionImportPreviewRowStatus.ParseError => "table-warning",
+            _ => string.Empty,
+        };
+    }
+
+    private string GetPreviewReasonClass(TransactionImportPreviewRow row)
+    {
+        return row.Status switch
+        {
+            TransactionImportPreviewRowStatus.Header => "text-muted",
+            TransactionImportPreviewRowStatus.NonData => "text-muted",
+            _ => "text-danger",
+        };
     }
 
     public class TransactionImportRequest
     {
         public string RawText { get; set; } = "";
+    }
+
+    public class TransactionImportPreviewResult
+    {
+        public char Separator { get; set; }
+        public int ColumnCount { get; set; }
+        public decimal LayoutConfidence { get; set; }
+        public decimal SchemaConfidence { get; set; }
+        public TransactionImportSchemaDefinition? SuggestedSchema { get; set; }
+        public TransactionImportPreviewHeader? HeaderRow { get; set; }
+        public List<TransactionImportPreviewColumn> Columns { get; set; } = new();
+        public List<TransactionImportFieldOption> FieldOptions { get; set; } = new();
+        public List<TransactionImportPreviewRow> Rows { get; set; } = new();
+        public List<string> ParsingErrors { get; set; } = new();
+    }
+
+    public class TransactionImportPreviewColumn
+    {
+        public int Index { get; set; }
+        public string DisplayName { get; set; } = "";
+        public TransactionImportFieldType SuggestedField { get; set; }
+    }
+
+    public class TransactionImportFieldOption
+    {
+        public TransactionImportFieldType FieldType { get; set; }
+        public string DisplayName { get; set; } = "";
+    }
+
+    public enum TransactionImportFieldType
+    {
+        Unknown,
+        TransactionDate,
+        BookingDate,
+        Description,
+        Amount,
+        Balance,
+        TransactionType,
+    }
+
+    public class TransactionImportPreviewRow
+    {
+        public int LineNumber { get; set; }
+        public string RawRow { get; set; } = "";
+        public List<string> Columns { get; set; } = new();
+        public TransactionImportPreviewRowStatus Status { get; set; } = TransactionImportPreviewRowStatus.Accepted;
+        public string? IgnoredReason { get; set; }
+    }
+
+    public enum TransactionImportPreviewRowStatus
+    {
+        Accepted,
+        Header,
+        NonData,
+        InvalidColumnCount,
+        ParseError,
+    }
+
+    public class TransactionImportPreviewHeader
+    {
+        public int LineNumber { get; set; }
+        public List<string> Columns { get; set; } = new();
+    }
+
+    public class TransactionImportSchemaDefinition
+    {
+        public int ColumnCount { get; set; }
+        public int TransactionDateIndex { get; set; }
+        public int DescriptionIndex { get; set; }
+        public int AmountIndex { get; set; }
+        public int? BookingDateIndex { get; set; }
+        public int? TransactionKindIndex { get; set; }
+        public int? BalanceIndex { get; set; }
+    }
+
+    public class TransactionImportWithSchemaRequest
+    {
+        public string RawText { get; set; } = "";
+        public TransactionImportSchemaDefinition Schema { get; set; } = new();
     }
 
     public class TransactionImportDto
@@ -195,175 +599,3 @@
         public string? Message { get; set; }
     }
 }
-@* @page "/import"
-@using System.ComponentModel.DataAnnotations
-@using System.Text
-@using Microsoft.AspNetCore.Mvc
-@inject IHttpClientFactory HttpClientFactory
-@rendermode InteractiveServer
-
-<h1>Importera transaktioner</h1>
-
-<EditForm Model="@importRequest" OnValidSubmit="ImportTransactions">
-    <DataAnnotationsValidator />
-    <ValidationSummary />
-
-    <div class="mb-3">
-        <label for="rawText">Klistra in transaktionstext</label>
-        <InputTextArea id="rawText" class="form-control" @bind-Value="importRequest.RawText" rows="10" />
-        <ValidationMessage For="@(() => importRequest.RawText)" />
-    </div>
-
-    <button type="submit" class="btn btn-primary mt-2">Import</button>
-</EditForm>
-
-@if (!string.IsNullOrWhiteSpace(errorMessage))
-{
-    <div class="alert alert-danger mt-3">@errorMessage</div>
-}
-
-@if (parsedTransactions?.Any() == true)
-{
-    <h2 class="mt-4">Parsed Transactions</h2>
-    <table class="table table-sm table-bordered mt-2">
-        <thead>
-            <tr>
-                <th>Booking Date</th>
-                <th>Transaction Date</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Balance</th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach (var tx in parsedTransactions)
-        {
-            <tr>
-                <td>@tx.BookingDate?.ToShortDateString()</td>
-                <td>@tx.TransactionDate.ToShortDateString()</td>
-                <td>@tx.Description</td>
-                <td>@tx.Amount.ToString("F2")</td>
-                <td>@(tx.Balance?.ToString("F2") ?? "")</td>
-            </tr>
-        }
-        </tbody>
-    </table>
-}
-
-@code {
-    private TransactionImportRequest importRequest = new();
-    private List<TransactionImportDto>? parsedTransactions;
-    private string? errorMessage;
-
-    private async Task ImportTransactions()
-    {
-        errorMessage = null;
-        parsedTransactions = null;
-
-        try
-        {
-            var client = HttpClientFactory.CreateClient("ApiClient");
-            var content = new StringContent(importRequest.RawText, Encoding.UTF8, "text/plain");
-
-            var response = await client.PostAsync("api/transactions/import", content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                parsedTransactions = await response.Content.ReadFromJsonAsync<List<TransactionImportDto>>();
-            }
-            else
-            {
-                var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
-                errorMessage = problem?.Detail ?? "Importen misslyckades.";
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Något gick fel: {ex.Message}";
-        }
-    }
-
-    public class TransactionImportRequest
-    {
-        [Required(ErrorMessage = "Du måste ange transaktionstext.")]
-        public string RawText { get; set; } = "";
-    }
-} *@
-
-@* @page "/import"
-@using Microsoft.AspNetCore.Mvc
-@using System.Text
-@inject IHttpClientFactory HttpClientFactory
-@rendermode InteractiveServer
-
-<h1>Importera transaktioner</h1>
-
-@if (!string.IsNullOrWhiteSpace(errorMessage))
-{
-    <div class="alert alert-danger">@errorMessage</div>
-}
-
-<textarea class="form-control" @bind="@rawText" rows="10"></textarea>
-<button class="btn btn-primary mt-2" @onclick="ImportTransactions">Import</button>
-
-@if (parsedTransactions?.Any() == true)
-{
-    <h2 class="mt-4">Parsed Transactions</h2>
-    <table class="table table-sm table-bordered mt-2">
-        <thead>
-            <tr>
-                <th>Booking Date</th>
-                <th>Transaction Date</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Balance</th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach (var tx in parsedTransactions)
-        {
-            <tr>
-                <td>@tx.BookingDate?.ToShortDateString()</td>
-                <td>@tx.TransactionDate.ToShortDateString()</td>
-                <td>@tx.Description</td>
-                <td>@tx.Amount.ToString("F2")</td>
-                <td>@(tx.Balance?.ToString("F2") ?? "")</td>
-            </tr>
-        }
-        </tbody>
-    </table>
-}
-
-@code {
-    private string rawText = "";
-    private List<TransactionImportDto>? parsedTransactions;
-    private string? errorMessage;
-
-    private async Task ImportTransactions()
-    {
-        errorMessage = null;
-        parsedTransactions = null;
-
-        try
-        {
-            var client = HttpClientFactory.CreateClient("ApiClient");
-            var content = new StringContent(rawText, Encoding.UTF8, "text/plain");
-
-            var response = await client.PostAsync("api/transactions/import", content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                parsedTransactions = await response.Content.ReadFromJsonAsync<List<TransactionImportDto>>();
-            }
-            else
-            {
-                var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
-                errorMessage = problem?.Detail ?? "Importen misslyckades.";
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Något gick fel: {ex.Message}";
-        }
-    }
-} *@
